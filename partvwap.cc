@@ -9,6 +9,13 @@
 #include <iomanip>
 #include <absl/time/time.h>
 #include <benchmark/benchmark.h>
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
+#include <parquet/arrow/writer.h>
+#include <parquet/arrow/reader.h>
+#include <arrow/testing/gtest_util.h>
+#include <absl/cleanup/cleanup.h>
 
 struct InputRow {
     int64_t ts_nanos;
@@ -127,6 +134,132 @@ TEST(ComputeVWAP, Basic) {
     EXPECT_THAT(output_rows, testing::ElementsAre(OutputRow{1005000000000, 17, 23, 100.0}));
 };
 
+arrow::Status WriteParquetFromInputRows(std::string filename, const std::vector<InputRow>& rows, const NameToId& providers, const NameToId& symbols) {
+    // Create schema
+    auto schema = arrow::schema({
+        arrow::field("provider", arrow::utf8()),
+        arrow::field("symbol", arrow::utf8()),
+        arrow::field("timestamp", arrow::int64()),
+        arrow::field("price", arrow::float64())
+    });
+
+    // Create builders
+    arrow::StringBuilder provider_builder;
+    arrow::StringBuilder symbol_builder;
+    arrow::Int64Builder timestamp_builder;
+    arrow::DoubleBuilder price_builder;
+
+    // Append data
+    for (const auto& row : rows) {
+        ARROW_RETURN_NOT_OK(provider_builder.Append(providers[row.provider_id]));
+        ARROW_RETURN_NOT_OK(symbol_builder.Append(symbols[row.symbol_id]));
+        ARROW_RETURN_NOT_OK(timestamp_builder.Append(row.ts_nanos));
+        ARROW_RETURN_NOT_OK(price_builder.Append(row.price));
+    }
+
+    // Create arrays
+    std::shared_ptr<arrow::Array> provider_array;
+    std::shared_ptr<arrow::Array> symbol_array;
+    std::shared_ptr<arrow::Array> timestamp_array;
+    std::shared_ptr<arrow::Array> price_array;
+
+    ARROW_RETURN_NOT_OK(provider_builder.Finish(&provider_array));
+    ARROW_RETURN_NOT_OK(symbol_builder.Finish(&symbol_array));
+    ARROW_RETURN_NOT_OK(timestamp_builder.Finish(&timestamp_array));
+    ARROW_RETURN_NOT_OK(price_builder.Finish(&price_array));
+
+    // Create table
+    auto table = arrow::Table::Make(schema, {provider_array, symbol_array, timestamp_array, price_array});
+
+    // Write to Parquet file
+    std::shared_ptr<arrow::io::FileOutputStream> outfile;
+    ARROW_RETURN_NOT_OK(arrow::io::FileOutputStream::Open(filename).Value(&outfile));
+
+    ARROW_RETURN_NOT_OK(
+        parquet::arrow::WriteTable(*table, arrow::default_memory_pool(), outfile, 65536)
+    );
+
+    return arrow::Status::OK();
+}
+
+arrow::Status ReadParquetToInputRows(const std::string& filename, std::function<void(const InputRow&)> row_callback) {
+    // Open Parquet file
+    std::shared_ptr<arrow::io::ReadableFile> infile;
+    ARROW_RETURN_NOT_OK(arrow::io::ReadableFile::Open(filename).Value(&infile));
+
+    // Create a ParquetFileReader instance
+    ARROW_ASSIGN_OR_RAISE(std::unique_ptr<parquet::arrow::FileReader> reader,
+        parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+
+    // Get number of row groups
+    int num_row_groups = reader->num_row_groups();
+
+    // Create name to ID maps
+    NameToId providers;
+    NameToId symbols;
+
+    // Process each row group
+    for (int r = 0; r < num_row_groups; r++) {
+        std::shared_ptr<arrow::Table> row_group_table;
+        ARROW_RETURN_NOT_OK(reader->RowGroup(r)->ReadTable(&row_group_table));
+
+        // Get column arrays for this row group
+        auto provider_array = std::static_pointer_cast<arrow::StringArray>(row_group_table->column(0)->chunk(0));
+        auto symbol_array = std::static_pointer_cast<arrow::StringArray>(row_group_table->column(1)->chunk(0));
+        auto timestamp_array = std::static_pointer_cast<arrow::Int64Array>(row_group_table->column(2)->chunk(0));
+        auto price_array = std::static_pointer_cast<arrow::DoubleArray>(row_group_table->column(3)->chunk(0));
+
+        // Process each row in the row group
+        for (int64_t i = 0; i < row_group_table->num_rows(); i++) {
+            InputRow row{
+                timestamp_array->Value(i),
+                providers.IDFromName(provider_array->GetView(i)),
+                symbols.IDFromName(symbol_array->GetView(i)),
+                price_array->Value(i)
+            };
+            row_callback(row);
+        }
+    }
+
+    return arrow::Status::OK();
+}
+
+
+TEST(ComputeVWAP, BasicThroughParquet) {
+    char tmp_file_template[] = "/tmp/partvwap_test_XXXXXX";
+    int fd = mkstemp(tmp_file_template);
+    if (fd == -1) {
+        throw std::runtime_error("Failed to create temporary file");
+    }
+    absl::Cleanup close_fd = [fd] { close(fd); };
+    std::string tmp_file(tmp_file_template);
+    NameToId providers;
+    NameToId symbols;
+    std::vector<InputRow> input_rows = {
+        InputRow{1000000000001, providers.IDFromName("provider1"), symbols.IDFromName("symbol1"), 100.0}
+    };
+    ASSERT_OK(WriteParquetFromInputRows(tmp_file, input_rows, providers, symbols));
+
+    // Read back and compute VWAP
+    std::vector<OutputRow> output_rows;
+    ComputeVWAP(
+        [&](auto&& f) {
+            ASSERT_OK(ReadParquetToInputRows(tmp_file, f));
+        },
+        [&](const OutputRow& output_row) {
+            output_rows.push_back(output_row);
+        }
+    );
+
+    // Verify results
+    EXPECT_THAT(output_rows, testing::ElementsAre(OutputRow{1005000000000, 0, 0, 100.0}));
+
+    // Delete the parquet file
+    std::remove(tmp_file.c_str());
+};
+
+
+
 static void BM_ComputeVWAP(benchmark::State& state) {
     for (auto _ : state) {
         double sum_price = 0;
@@ -149,6 +282,52 @@ static void BM_ComputeVWAP(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * 1000);
 }
 BENCHMARK(BM_ComputeVWAP);
+
+static void BM_ComputeVWAPThroughParquet(benchmark::State& state) {
+    char tmp_file_template[] = "/tmp/partvwap_bench_XXXXXX";
+    int fd = mkstemp(tmp_file_template);
+    if (fd == -1) {
+        throw std::runtime_error("Failed to create temporary file");
+    }
+    absl::Cleanup close_fd = [fd] { close(fd); };
+    std::string tmp_file(tmp_file_template);
+    NameToId providers;
+    NameToId symbols;
+    std::vector<InputRow> input_rows;
+    input_rows.reserve(1000000);
+
+    // Create 1000 rows with varying timestamps, providers, symbols and prices
+    for (int64_t i = 0; i < input_rows.capacity(); i++) {
+        input_rows.push_back(InputRow{
+            1000000000000 + i * 1000000,  // Timestamps 1ms apart
+            providers.IDFromName("provider" + std::to_string(i % 10)),  // 10 providers
+            symbols.IDFromName("symbol" + std::to_string(i % 100)),     // 100 symbols
+            100.0 + (i % 10)  // Prices varying from 100-109
+        });
+    }
+    ASSERT_OK(WriteParquetFromInputRows(tmp_file, input_rows, providers, symbols));
+
+    for (auto _ : state) {
+        // Read back and compute VWAP
+        double sum_twap = 0;
+        ComputeVWAP(
+            [&](auto&& f) {
+                ASSERT_OK(ReadParquetToInputRows(tmp_file, f));
+            },
+            [&](const OutputRow& output_row) {
+                sum_twap += output_row.twap;
+            }
+        );
+        benchmark::DoNotOptimize(sum_twap);
+    }
+
+    state.SetItemsProcessed(state.iterations() * input_rows.size());
+
+    // Delete the parquet file
+    std::remove(tmp_file.c_str());
+}
+
+
 
 TEST(Benchmarks, RunAll) {
     ::benchmark::RunSpecifiedBenchmarks("all");
