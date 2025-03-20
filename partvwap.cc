@@ -183,38 +183,58 @@ arrow::Status WriteParquetFromInputRows(std::string filename, const std::vector<
 }
 
 arrow::Status ReadParquetToInputRows(const std::string& filename, std::function<void(const InputRow&)> row_callback) {
-    // Open Parquet file
-    std::shared_ptr<arrow::io::ReadableFile> infile;
-    ARROW_RETURN_NOT_OK(arrow::io::ReadableFile::Open(filename).Value(&infile));
+    auto reader_props = parquet::ArrowReaderProperties();
+    
+    reader_props.set_read_dictionary(0, true); // provider column
+    reader_props.set_read_dictionary(1, true); // symbol column
+    
+    parquet::arrow::FileReaderBuilder reader_builder;
+    ARROW_RETURN_NOT_OK(
+        reader_builder.OpenFile(filename));
+    reader_builder.memory_pool(arrow::default_memory_pool());
+    reader_builder.properties(reader_props);
 
-    // Create a ParquetFileReader instance
-    ARROW_ASSIGN_OR_RAISE(std::unique_ptr<parquet::arrow::FileReader> reader,
-        parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+    std::unique_ptr<parquet::arrow::FileReader> arrow_reader;
+    ARROW_ASSIGN_OR_RAISE(arrow_reader, reader_builder.Build());
 
-    // Get number of row groups
-    int num_row_groups = reader->num_row_groups();
+    std::shared_ptr<arrow::RecordBatchReader> rb_reader;
+    ARROW_RETURN_NOT_OK(arrow_reader->GetRecordBatchReader(&rb_reader));
 
     // Create name to ID maps
     NameToId providers;
     NameToId symbols;
+    // Process record batches
+    std::shared_ptr<arrow::RecordBatch> batch;
+    while (rb_reader->ReadNext(&batch).ok() && batch != nullptr) {
+        // Get column arrays for this batch
+        auto provider_array = std::static_pointer_cast<arrow::DictionaryArray>(batch->column(0));
+        auto symbol_array = std::static_pointer_cast<arrow::DictionaryArray>(batch->column(1));
+        auto timestamp_array = std::static_pointer_cast<arrow::Int64Array>(batch->column(2));
+        auto price_array = std::static_pointer_cast<arrow::DoubleArray>(batch->column(3));
+        // Unpack provider dictionary
+        auto provider_dict = std::static_pointer_cast<arrow::StringArray>(provider_array->dictionary());
+        auto provider_ids = std::vector<int64_t>(provider_dict->length());
+        for (int64_t i = 0; i < provider_dict->length(); i++) {
+            provider_ids[i] = providers.IDFromName(provider_dict->GetView(i));
+        }
+        ARROW_ASSIGN_OR_RAISE(auto provider_indices_view, provider_array->indices()->View(arrow::int32()));
+        auto provider_indices = std::static_pointer_cast<arrow::Int32Array>(provider_indices_view);
+        
+        // Unpack symbol dictionary
+        auto symbol_dict = std::static_pointer_cast<arrow::StringArray>(symbol_array->dictionary());
+        auto symbol_ids = std::vector<int64_t>(symbol_dict->length());
+        for (int64_t i = 0; i < symbol_dict->length(); i++) {
+            symbol_ids[i] = symbols.IDFromName(symbol_dict->GetView(i));
+        }
+        ARROW_ASSIGN_OR_RAISE(auto symbol_indices_view, symbol_array->indices()->View(arrow::int32()));
+        auto symbol_indices = std::static_pointer_cast<arrow::Int32Array>(symbol_indices_view);
 
-    // Process each row group
-    for (int r = 0; r < num_row_groups; r++) {
-        std::shared_ptr<arrow::Table> row_group_table;
-        ARROW_RETURN_NOT_OK(reader->RowGroup(r)->ReadTable(&row_group_table));
-
-        // Get column arrays for this row group
-        auto provider_array = std::static_pointer_cast<arrow::StringArray>(row_group_table->column(0)->chunk(0));
-        auto symbol_array = std::static_pointer_cast<arrow::StringArray>(row_group_table->column(1)->chunk(0));
-        auto timestamp_array = std::static_pointer_cast<arrow::Int64Array>(row_group_table->column(2)->chunk(0));
-        auto price_array = std::static_pointer_cast<arrow::DoubleArray>(row_group_table->column(3)->chunk(0));
-
-        // Process each row in the row group
-        for (int64_t i = 0; i < row_group_table->num_rows(); i++) {
+        // Process each row in the batch
+        for (int64_t i = 0; i < batch->num_rows(); i++) {
             InputRow row{
                 timestamp_array->Value(i),
-                providers.IDFromName(provider_array->GetView(i)),
-                symbols.IDFromName(symbol_array->GetView(i)),
+                provider_ids[provider_indices->Value(i)],
+                symbol_ids[symbol_indices->Value(i)],
                 price_array->Value(i)
             };
             row_callback(row);
@@ -326,7 +346,7 @@ static void BM_ComputeVWAPThroughParquet(benchmark::State& state) {
     // Delete the parquet file
     std::remove(tmp_file.c_str());
 }
-
+BENCHMARK(BM_ComputeVWAPThroughParquet);
 
 
 TEST(Benchmarks, RunAll) {

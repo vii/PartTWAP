@@ -27,25 +27,8 @@ FetchContent_MakeAvailable(benchmark)
 
 set(ARROW_INSTALL_DIR ${CMAKE_BINARY_DIR}/arrow-install)
 set(EP_LOG_LEVEL DEBUG)
-set(CMAKE_VERBOSE_MAKEFILE ON)
-# Clone and build Apache Arrow
-include(FetchContent)
+include(ExternalProject)
 
-FetchContent_Declare(
-    arrow
-    GIT_REPOSITORY https://github.com/apache/arrow.git
-    GIT_TAG main
-    SOURCE_SUBDIR cpp
-)
-
-set(ARROW_BUILD_STATIC ON)
-set(ARROW_BUILD_SHARED OFF) 
-set(ARROW_BUILD_TESTS OFF)
-set(ARROW_PARQUET ON)
-
-FetchContent_MakeAvailable(arrow)
-
-/*
 ExternalProject_Add(arrow_project
         GIT_REPOSITORY "https://github.com/apache/arrow.git"
         GIT_TAG "main"  # Change this to the specific version you want
@@ -67,17 +50,20 @@ ExternalProject_Add(arrow_project
         LOG_CONFIGURE ON
         LOG_BUILD ON
         LOG_INSTALL ON
+        BUILD_BYPRODUCTS ${ARROW_INSTALL_DIR}/lib64/cmake/Arrow/ArrowConfig.cmake ${ARROW_INSTALL_DIR}/lib64/cmake/Arrow/ArrowTargets.cmake ${ARROW_INSTALL_DIR}/lib64/cmake/Parquet/ParquetConfig.cmake 
 )
 
-ExternalProject_Get_Property(arrow_project install_dir)
-*/
 
-set(Arrow_DIR ${install_dir}/lib64/cmake/Arrow)
-set(Parquet_DIR ${install_dir}/lib64/cmake/Parquet)
+
+
+
+set(Arrow_DIR ${ARROW_INSTALL_DIR}/lib64/cmake/Arrow)
+set(Parquet_DIR ${ARROW_INSTALL_DIR}/lib64/cmake/Parquet)
 
 # Find Arrow and Parquet packages
 find_package(Arrow QUIET)
 find_package(Parquet QUIET)
+
 
 # Fetch and configure Abseil
 FetchContent_Declare(
@@ -101,8 +87,8 @@ target_link_libraries(partvwap_test
     absl::cleanup
     absl::time
     benchmark::benchmark
-    Arrow::arrow_static
-    Parquet::parquet_static
+    $<$<BOOL:${Arrow_FOUND}>:Arrow::arrow_static>
+    $<$<BOOL:${Parquet_FOUND}>:Parquet::parquet_static>
 )
 target_compile_features(partvwap_test PRIVATE cxx_std_20)
 target_compile_definitions(partvwap_test PRIVATE 
