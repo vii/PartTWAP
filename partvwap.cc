@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cmath>
 #include <absl/container/flat_hash_map.h>
+#include <absl/status/status.h>
 #include <absl/strings/string_view.h>
 #include <iostream>
 #include <vector>
@@ -16,6 +17,34 @@
 #include <parquet/arrow/reader.h>
 #include <arrow/testing/gtest_util.h>
 #include <absl/cleanup/cleanup.h>
+#include <absl/strings/str_cat.h>
+#include <fstream>
+#include "ic.h"
+
+
+struct TempFileForTest {
+    int tmp_fd;
+    std::string tmp_filename;
+
+    TempFileForTest() {
+        char tmp_file_template[] = "/tmp/partvwap_test_XXXXXX";
+        tmp_fd = mkstemp(tmp_file_template);
+        if (tmp_fd == -1) {
+            throw std::runtime_error("Failed to create temporary file");
+        }
+        tmp_filename = tmp_file_template;
+    }
+
+    ~TempFileForTest() {
+        if (close(tmp_fd) == -1) {
+            std::cerr << "Error closing temporary file " << tmp_filename << ": " << strerror(errno) << std::endl;
+        }
+        if (!tmp_filename.empty()) {
+            std::remove(tmp_filename.c_str());
+        }
+    }
+};
+
 
 struct InputRow {
     int64_t ts_nanos;
@@ -133,6 +162,130 @@ TEST(ComputeVWAP, Basic) {
     );
     EXPECT_THAT(output_rows, testing::ElementsAre(OutputRow{1005000000000, 17, 23, 100.0}));
 };
+
+// Write an int64_t value in little-endian format to an output stream
+void LittleEndianInt64(std::ostream& os, int64_t value) {
+    for (int i = 0; i < 8; ++i) {
+        os.put(static_cast<char>((value >> (i * 8)) & 0xFF));
+    }
+}
+
+int64_t ReadLittleEndianInt64(std::istream& is) {
+    int64_t value = 0;
+    for (int i = 0; i < 8; ++i) {
+        value |= static_cast<int64_t>(static_cast<unsigned char>(is.get())) << (i * 8);
+    }
+    return value;
+}
+
+
+
+
+void WriteTurboPForFromInputRows(std::string filename, const std::vector<InputRow>& rows, const NameToId& providers, const NameToId& symbols, int64_t chunk = 1024*1024) {
+    std::ofstream f(filename);
+    if (!f.good()) {
+        throw std::runtime_error(absl::StrCat("Failed to open file: ", filename));
+    }
+
+    LittleEndianInt64(f, rows.size());
+    size_t buffer_size = bitnbound256v32(std::min(chunk, int64_t(rows.size())));
+    std::vector<unsigned char> buffer(buffer_size);
+
+    for (int64_t i = 0; i < rows.size(); ) {
+        int64_t chunk_size = std::min(chunk, int64_t(rows.size()) - i);
+        LittleEndianInt64(f, chunk_size);
+
+        std::vector<uint64_t> timestamp_chunk;
+        std::vector<uint32_t> provider_chunk;
+        std::vector<uint32_t> symbol_chunk;
+        std::vector<double> price_chunk;
+
+        timestamp_chunk.reserve(chunk_size);
+        provider_chunk.reserve(chunk_size);
+        symbol_chunk.reserve(chunk_size);
+        price_chunk.reserve(chunk_size);
+
+        for (int64_t j = 0; j < chunk_size; ++j, ++i) {
+            timestamp_chunk.push_back(rows[i].ts_nanos);
+            provider_chunk.push_back(rows[i].provider_id);
+            symbol_chunk.push_back(rows[i].symbol_id);
+            price_chunk.push_back(rows[i].price);
+        }
+
+        size_t ts_actual_size = bitnpack128v64(timestamp_chunk.data(), timestamp_chunk.size(), buffer.data());
+        LittleEndianInt64(f, ts_actual_size);
+        f.write(reinterpret_cast<const char*>(buffer.data()), ts_actual_size);
+
+    }
+
+
+    if (!f.good()) {
+        throw std::runtime_error(absl::StrCat("Failed to write TurboPFor data to file: ", filename));
+    }
+    f.close();
+    if (f.fail()) {
+        throw std::runtime_error(absl::StrCat("Failed to close file: ", filename));
+    }
+
+
+void ReadTurboPForFromInputRows(const std::string& filename, std::function<void(const InputRow&)> row_callback) {
+    std::ifstream f(filename);
+    if (!f.good()) {
+        throw std::runtime_error(absl::StrCat("Failed to open file: ", filename));
+    }
+    int64_t num_rows = ReadLittleEndianInt64(f);
+
+        std::vector<uint64_t> timestamp_chunk;
+        std::vector<uint32_t> provider_chunk;
+        std::vector<uint32_t> symbol_chunk;
+        std::vector<double> price_chunk;
+
+    std::vector<unsigned char> buffer;
+    while (num_rows > 0) {
+        int64_t chunk_size = ReadLittleEndianInt64(f);
+        if (!f.good()) {
+            throw std::runtime_error(absl::StrCat("Failed to read chunk size from file: ", filename));
+        }
+
+        timestamp_chunk.clear();
+        provider_chunk.clear();
+        symbol_chunk.clear();
+        price_chunk.clear();
+
+        timestamp_chunk.reserve(chunk_size);
+        provider_chunk.reserve(chunk_size);
+        symbol_chunk.reserve(chunk_size);
+        price_chunk.reserve(chunk_size);
+
+        int64_t ts_actual_size = ReadLittleEndianInt64(f);
+        if (!f.good()) {
+            throw std::runtime_error(absl::StrCat("Failed to read timestamp chunksize from file: ", filename));
+        }
+        buffer.clear();
+        buffer.resize(ts_actual_size);
+        f.read(reinterpret_cast<char*>(buffer.data()), ts_actual_size);
+        if (!f.good()) {
+            throw std::runtime_error(absl::StrCat("Failed to read timestamp data from file: ", filename));
+        }
+        bitunpack128v64(buffer.data(), ts_actual_size, timestamp_chunk.data(), timestamp_chunk.size());
+    }
+}
+
+TEST(ComputeVWAP, InputRowsRoundTrip) {
+    std::vector<InputRow> input_rows;
+    TempFileForTest tmp_file;
+    input_rows.reserve(1000);
+    for (int64_t i = 0; i < 1000; ++i) {
+        input_rows.push_back(InputRow{1000000000000 + i * 1000000, 0, 0, 100.0 + (i % 10)});
+    }
+    WriteTurboPForFromInputRows(tmp_file.tmp_filename, input_rows, NameToId{}, NameToId{});
+    std::vector<InputRow> out_rows;
+    ReadTurboPForFromInputRows(tmp_file.tmp_filename, [&](const InputRow& row) {
+        out_rows.push_back(row);
+    });
+    EXPECT_THAT(input_rows, testing::ElementsAreArray(out_rows));
+}
+
 
 arrow::Status WriteParquetFromInputRows(std::string filename, const std::vector<InputRow>& rows, const NameToId& providers, const NameToId& symbols) {
     // Create schema
@@ -304,13 +457,7 @@ static void BM_ComputeVWAP(benchmark::State& state) {
 BENCHMARK(BM_ComputeVWAP);
 
 static void BM_ComputeVWAPThroughParquet(benchmark::State& state) {
-    char tmp_file_template[] = "/tmp/partvwap_bench_XXXXXX";
-    int fd = mkstemp(tmp_file_template);
-    if (fd == -1) {
-        throw std::runtime_error("Failed to create temporary file");
-    }
-    absl::Cleanup close_fd = [fd] { close(fd); };
-    std::string tmp_file(tmp_file_template);
+    TempFileForTest tmp_file;
     NameToId providers;
     NameToId symbols;
     std::vector<InputRow> input_rows;
@@ -325,14 +472,14 @@ static void BM_ComputeVWAPThroughParquet(benchmark::State& state) {
             100.0 + (i % 10)  // Prices varying from 100-109
         });
     }
-    ASSERT_OK(WriteParquetFromInputRows(tmp_file, input_rows, providers, symbols));
+    ASSERT_OK(WriteParquetFromInputRows(tmp_file.tmp_filename, input_rows, providers, symbols));
 
     for (auto _ : state) {
         // Read back and compute VWAP
         double sum_twap = 0;
         ComputeVWAP(
             [&](auto&& f) {
-                ASSERT_OK(ReadParquetToInputRows(tmp_file, f));
+                ASSERT_OK(ReadParquetToInputRows(tmp_file.tmp_filename, f));
             },
             [&](const OutputRow& output_row) {
                 sum_twap += output_row.twap;
@@ -343,10 +490,46 @@ static void BM_ComputeVWAPThroughParquet(benchmark::State& state) {
 
     state.SetItemsProcessed(state.iterations() * input_rows.size());
 
-    // Delete the parquet file
-    std::remove(tmp_file.c_str());
 }
 BENCHMARK(BM_ComputeVWAPThroughParquet);
+
+
+
+static void BM_TurboPForCompression(benchmark::State& state) {
+    TempFileForTest tmp_file;
+    NameToId providers;
+    NameToId symbols;
+    std::vector<InputRow> input_rows;
+    input_rows.reserve(1000000);
+
+    // Create 1000 rows with varying timestamps, providers, symbols and prices
+    for (int64_t i = 0; i < input_rows.capacity(); i++) {
+        input_rows.push_back(InputRow{
+            1000000000000 + i * 1000000,  // Timestamps 1ms apart
+            providers.IDFromName("provider" + std::to_string(i % 10)),  // 10 providers
+            symbols.IDFromName("symbol" + std::to_string(i % 100)),     // 100 symbols
+            100.0 + (i % 10)  // Prices varying from 100-109
+        });
+    }
+    ASSERT_OK(WriteTurboPForFromInputRows(tmp_file.tmp_filename, input_rows, providers, symbols));
+
+    for (auto _ : state) {
+        // Read back and compute VWAP
+        double sum_twap = 0;
+        ComputeVWAP(
+            [&](auto&& f) {
+                ASSERT_OK(ReadTurboPForFromInputRows(tmp_file.tmp_filename, f));
+            },
+            [&](const OutputRow& output_row) {
+                sum_twap += output_row.twap;
+            }
+        );
+        benchmark::DoNotOptimize(sum_twap);
+    }
+
+    state.SetItemsProcessed(state.iterations() * input_rows.size());
+}
+BENCHMARK(BM_TurboPForCompression);
 
 
 TEST(Benchmarks, RunAll) {

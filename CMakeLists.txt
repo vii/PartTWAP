@@ -52,6 +52,31 @@ ExternalProject_Add(arrow_project
         LOG_INSTALL ON
         BUILD_BYPRODUCTS ${ARROW_INSTALL_DIR}/lib64/cmake/Arrow/ArrowConfig.cmake ${ARROW_INSTALL_DIR}/lib64/cmake/Arrow/ArrowTargets.cmake ${ARROW_INSTALL_DIR}/lib64/cmake/Parquet/ParquetConfig.cmake 
 )
+# Fetch and configure TurboPFor
+FetchContent_Declare(
+    TurboPFor
+    GIT_REPOSITORY https://github.com/powturbo/TurboPFor-Integer-Compression.git
+    GIT_TAG master
+)
+
+# Set TurboPFor build options
+set(TURBOPFOR_BUILD_STATIC ON CACHE BOOL "Build static TurboPFor library")
+set(TURBOPFOR_BUILD_SHARED OFF CACHE BOOL "Build shared TurboPFor library")
+
+FetchContent_MakeAvailable(TurboPFor)
+
+# Create an interface library for TurboPFor
+add_library(turbopfor_interface INTERFACE)
+FetchContent_GetProperties(TurboPFor SOURCE_DIR TURBOPFOR_SOURCE_DIR)
+
+add_custom_target(build_ic ALL
+	COMMAND make AVX2=1 OPT="-fpermissive" libic.a -j 8
+        WORKING_DIRECTORY ${TURBOPFOR_SOURCE_DIR})
+
+add_dependencies(turbopfor_interface build_ic)
+target_include_directories(turbopfor_interface INTERFACE ${TURBOPFOR_SOURCE_DIR})
+target_link_libraries(turbopfor_interface INTERFACE ${TURBOPFOR_SOURCE_DIR}/libic.a rt m)
+target_compile_definitions(turbopfor_interface INTERFACE USE_TURBOPFOR)
 
 
 
@@ -77,7 +102,7 @@ FetchContent_MakeAvailable(absl)
 # Add partvwap test executable
 add_executable(partvwap_test partvwap.cc)
 add_dependencies(partvwap_test arrow_project)
-target_include_directories(partvwap_test PRIVATE ${ARROW_INSTALL_DIR}/include)
+target_include_directories(partvwap_test PRIVATE ${ARROW_INSTALL_DIR}/include ${TURBOPFOR_SOURCE_DIR}/include)
 target_link_directories(partvwap_test PRIVATE ${ARROW_INSTALL_DIR}/lib64)
 target_link_libraries(partvwap_test
     GTest::gtest_main
@@ -85,8 +110,10 @@ target_link_libraries(partvwap_test
     absl::flat_hash_map
     absl::strings
     absl::cleanup
+    absl::status
     absl::time
     benchmark::benchmark
+    turbopfor_interface
     $<$<BOOL:${Arrow_FOUND}>:Arrow::arrow_static>
     $<$<BOOL:${Parquet_FOUND}>:Parquet::parquet_static>
 )
