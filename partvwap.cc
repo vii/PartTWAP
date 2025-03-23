@@ -51,6 +51,9 @@ struct InputRow {
     uint32_t provider_id;
     uint32_t symbol_id;
     double price;
+
+    bool operator==(const InputRow& other) const = default;
+    auto operator<=>(const InputRow& other) const = default;
 };
 
 struct OutputRow {
@@ -226,7 +229,7 @@ void WriteTurboPForFromInputRows(std::string filename, const std::vector<InputRo
     if (f.fail()) {
         throw std::runtime_error(absl::StrCat("Failed to close file: ", filename));
     }
-
+}
 
 void ReadTurboPForFromInputRows(const std::string& filename, std::function<void(const InputRow&)> row_callback) {
     std::ifstream f(filename);
@@ -511,14 +514,14 @@ static void BM_TurboPForCompression(benchmark::State& state) {
             100.0 + (i % 10)  // Prices varying from 100-109
         });
     }
-    ASSERT_OK(WriteTurboPForFromInputRows(tmp_file.tmp_filename, input_rows, providers, symbols));
+    WriteTurboPForFromInputRows(tmp_file.tmp_filename, input_rows, providers, symbols);
 
     for (auto _ : state) {
         // Read back and compute VWAP
         double sum_twap = 0;
         ComputeVWAP(
             [&](auto&& f) {
-                ASSERT_OK(ReadTurboPForFromInputRows(tmp_file.tmp_filename, f));
+                ReadTurboPForFromInputRows(tmp_file.tmp_filename, f);
             },
             [&](const OutputRow& output_row) {
                 sum_twap += output_row.twap;
