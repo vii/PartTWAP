@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.26)
 project(partvwap)
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_DEBUG "-O3 -ggdb")
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS ON)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -ggdb")
+set(CMAKE_CXX_FLAGS_DEBUG "-ggdb -fsanitize=address -fno-omit-frame-pointer")
+# Set linker flags for ASan in debug mode
+set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -fsanitize=address")
 
 
 # Include FetchContent for downloading dependencies
@@ -69,16 +74,18 @@ FetchContent_MakeAvailable(TurboPFor)
 add_library(turbopfor_interface INTERFACE)
 FetchContent_GetProperties(TurboPFor SOURCE_DIR TURBOPFOR_SOURCE_DIR)
 
-add_custom_target(build_ic ALL
-	COMMAND make AVX2=1 OPT="-fpermissive" libic.a -j 8
-        WORKING_DIRECTORY ${TURBOPFOR_SOURCE_DIR})
+add_custom_command(
+    OUTPUT ${TURBOPFOR_SOURCE_DIR}/libic.a
+    COMMAND make OPT="-fpermissive" libic.a -j 8
+    WORKING_DIRECTORY ${TURBOPFOR_SOURCE_DIR}
+    COMMENT "Building TurboPFor libic.a"
+)
+
+add_custom_target(build_ic ALL DEPENDS ${TURBOPFOR_SOURCE_DIR}/libic.a)
 
 add_dependencies(turbopfor_interface build_ic)
 target_include_directories(turbopfor_interface INTERFACE ${TURBOPFOR_SOURCE_DIR})
 target_link_libraries(turbopfor_interface INTERFACE ${TURBOPFOR_SOURCE_DIR}/libic.a rt m)
-target_compile_definitions(turbopfor_interface INTERFACE USE_TURBOPFOR)
-
-
 
 
 
@@ -101,9 +108,6 @@ FetchContent_MakeAvailable(absl)
 
 # Add partvwap test executable
 add_executable(partvwap_test partvwap.cc)
-add_dependencies(partvwap_test arrow_project)
-target_include_directories(partvwap_test PRIVATE ${ARROW_INSTALL_DIR}/include ${TURBOPFOR_SOURCE_DIR}/include)
-target_link_directories(partvwap_test PRIVATE ${ARROW_INSTALL_DIR}/lib64)
 target_link_libraries(partvwap_test
     GTest::gtest_main
     GTest::gmock_main
@@ -113,14 +117,52 @@ target_link_libraries(partvwap_test
     absl::status
     absl::time
     benchmark::benchmark
-    turbopfor_interface
+)
+
+
+
+
+add_executable(parquet_test parquet_test.cc)
+add_dependencies(parquet_test arrow_project)
+target_include_directories(parquet_test PRIVATE ${ARROW_INSTALL_DIR}/include)
+target_link_directories(parquet_test PRIVATE ${ARROW_INSTALL_DIR}/lib64)
+target_link_libraries(parquet_test
+    GTest::gtest_main
+    GTest::gmock_main
+    absl::flat_hash_map
+    absl::strings
+    absl::cleanup
+    absl::status
+    absl::time
+    benchmark::benchmark
     $<$<BOOL:${Arrow_FOUND}>:Arrow::arrow_static>
     $<$<BOOL:${Parquet_FOUND}>:Parquet::parquet_static>
 )
-target_compile_features(partvwap_test PRIVATE cxx_std_20)
-target_compile_definitions(partvwap_test PRIVATE 
+
+target_compile_definitions(parquet_test PRIVATE 
     ARROW_DEPRECATION_WARNINGS=0
 )
 
+
+add_executable(turbo_test turbo_test.cc)
+add_dependencies(turbo_test turbopfor_interface)
+target_include_directories(turbo_test PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
+target_link_libraries(turbo_test
+    GTest::gtest_main
+    GTest::gmock_main
+    absl::flat_hash_map
+    absl::strings
+    absl::cleanup
+    absl::status
+    absl::time
+    benchmark::benchmark
+    turbopfor_interface
+)
+
+
 enable_testing()
+
+
 add_test(NAME partvwap_test COMMAND partvwap_test)
+add_test(NAME parquet_test COMMAND parquet_test)
+add_test(NAME turbo_test COMMAND turbo_test)
