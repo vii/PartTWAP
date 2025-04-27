@@ -49,3 +49,25 @@ arrow::Status ReadManyParquetFiles(const FilenameContainer &filenames,
   }
   return arrow::Status::OK();
 }
+
+struct ParquetOutputWriter {
+  std::shared_ptr<arrow::io::FileOutputStream> outfile;
+  const NameToId &providers;
+  const NameToId &symbols;
+  int64_t buffered_rows = 0;
+
+  arrow::StringBuilder provider_builder;
+  arrow::StringBuilder symbol_builder;
+  arrow::Int64Builder timestamp_builder;
+  arrow::DoubleBuilder twap_builder;
+
+  std::shared_ptr<arrow::StringArray> provider_array;
+  std::shared_ptr<arrow::StringArray> symbol_array;
+  std::shared_ptr<arrow::Int64Array> timestamp_array;
+  std::shared_ptr<arrow::DoubleArray> twap_array;
+
+  arrow::Status OpenOutputFile(std::string filename);
+  arrow::Status AppendOutputRow(const OutputRow &row);
+  arrow::Status OutputRowChunk();
+  arrow::Status CloseOutputFile();
+};

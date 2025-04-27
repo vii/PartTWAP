@@ -143,3 +143,73 @@ arrow::Status ReadParquetToInputRows(
 
   return arrow::Status::OK();
 }
+
+arrow::Status ParquetOutputWriter::OpenOutputFile(std::string filename) {
+  ARROW_RETURN_NOT_OK(arrow::io::FileOutputStream::Open(filename).Value(&outfile));
+  return arrow::Status::OK();
+}
+
+arrow::Status ParquetOutputWriter::AppendOutputRow(const OutputRow &row) {
+  ARROW_RETURN_NOT_OK(provider_builder.Append(providers[row.provider_id]));
+  ARROW_RETURN_NOT_OK(symbol_builder.Append(symbols[row.symbol_id]));
+  ARROW_RETURN_NOT_OK(timestamp_builder.Append(row.ts_nanos));
+  ARROW_RETURN_NOT_OK(twap_builder.Append(row.twap));
+  buffered_rows++;
+
+  if (buffered_rows >= 1024*1024) {
+    ARROW_RETURN_NOT_OK(OutputRowChunk());
+  }
+
+  return arrow::Status::OK();
+}
+
+arrow::Status ParquetOutputWriter::OutputRowChunk() {
+  if (buffered_rows == 0) {
+    return arrow::Status::OK();
+  }
+
+  std::shared_ptr<arrow::Array> provider_array;
+  std::shared_ptr<arrow::Array> symbol_array;
+  std::shared_ptr<arrow::Array> timestamp_array;
+  std::shared_ptr<arrow::Array> twap_array;
+
+  ARROW_RETURN_NOT_OK(provider_builder.Finish(&provider_array));
+  ARROW_RETURN_NOT_OK(symbol_builder.Finish(&symbol_array));
+  ARROW_RETURN_NOT_OK(timestamp_builder.Finish(&timestamp_array));
+  ARROW_RETURN_NOT_OK(twap_builder.Finish(&twap_array));
+  auto schema = arrow::schema({arrow::field("provider", arrow::utf8()),
+                    arrow::field("symbol", arrow::utf8()),
+                    arrow::field("timestamp", arrow::int64()),
+                    arrow::field("twap", arrow::float64())});
+  
+  auto batch = arrow::RecordBatch::Make(schema, provider_array->length(),
+                    {provider_array, symbol_array, timestamp_array, twap_array});
+  
+  std::shared_ptr<parquet::arrow::FileWriter> writer;
+  ARROW_ASSIGN_OR_RAISE(
+      writer,
+      parquet::arrow::FileWriter::Open(
+          *schema, 
+          arrow::default_memory_pool(), 
+          outfile, 
+          parquet::WriterProperties::Builder().build(),
+          parquet::ArrowWriterProperties::Builder().build()));
+  
+  ARROW_RETURN_NOT_OK(writer->WriteRecordBatch(*batch));
+  ARROW_RETURN_NOT_OK(writer->Close());
+  
+  // Reset builders for next chunk
+  provider_builder.Reset();
+  symbol_builder.Reset();
+  timestamp_builder.Reset();
+  twap_builder.Reset();
+  
+  buffered_rows = 0;
+  return arrow::Status::OK();
+}
+
+arrow::Status ParquetOutputWriter::CloseOutputFile() {
+  ARROW_RETURN_NOT_OK(OutputRowChunk());
+  ARROW_RETURN_NOT_OK(outfile->Close());
+  return arrow::Status::OK();
+}
