@@ -1,6 +1,3 @@
-set(BOOST_INCLUDE_LIBRARIES thread filesystem system program_options)
-set(BOOST_ENABLE_CMAKE ON)
-
 include(FetchContent)
 set(BOOST_ENABLE_CMAKE ON)
 FetchContent_Declare(
