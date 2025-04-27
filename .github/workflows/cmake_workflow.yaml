@@ -18,16 +18,17 @@ jobs:
           sudo apt-get install -y libboost-all-dev libthrift-dev cmake
 
       - name: Configure project
-        run: cmake -S . -B build
+        run: cmake -S . -B build --config Release
 
       - name: Build
-        run: cmake --build build --config Release -- -j$(nproc)
+        continue-on-error: true
+        run: make -C build -k
 
       - name: Configure project again now that Arrow and Parquet are installed
-        run: cmake -S . -B build
+        run: cmake -S . -B build --config Release
 
       - name: Build
-        run: cmake --build build --config Release -- -j$(nproc)
+        run: make -C build
 
       - name: Run tests
         run: |
