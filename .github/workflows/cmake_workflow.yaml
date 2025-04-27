@@ -13,9 +13,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup CMake
-        uses: jwlawson/actions-setup-cmake@v1
+        uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.24.2'
+          cmake-version: '3.30.3'
 
       - name: Configure project
         run: cmake -S . -B build
