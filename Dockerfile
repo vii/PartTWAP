@@ -26,7 +26,7 @@ RUN apt-get install -y libboost-all-dev libthrift-dev cmake \
 
 # Clone and build Arrow
 WORKDIR /tmp
-RUN git clone https://github.com/apache/arrow.git && \
+RUN git clone https://github.com/apache/arrow.git -b apache-arrow-19.0.1 && \
     cd arrow/cpp && \
     mkdir build && \
     cd build && \

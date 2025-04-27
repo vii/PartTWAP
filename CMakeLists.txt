@@ -52,9 +52,8 @@ target_link_libraries(partvwap_test
 )
 
 
-if (PARQUET_FOUND) # this will fail the first time because the arrow and parquet libraries are not built, then succeeds the next time
+if (Parquet_FOUND) # this will fail the first time because the arrow and parquet libraries are not built, then succeeds the next time
     add_executable(partvwap_parquet_test partvwap_parquet_test.cc partvwap_parquet.cc)
-    add_dependencies(partvwap_parquet_test arrow_project)
     target_include_directories(partvwap_parquet_test PRIVATE ${ARROW_INSTALL_DIR}/include)
     target_link_directories(partvwap_parquet_test PRIVATE ${ARROW_INSTALL_DIR}/lib64)
     target_link_libraries(partvwap_parquet_test
@@ -66,8 +65,8 @@ if (PARQUET_FOUND) # this will fail the first time because the arrow and parquet
         absl::status
         absl::time
         benchmark::benchmark
-        Parquet::parquet_static
         Arrow::arrow_static
+        Parquet::parquet_static
     )
 
     target_compile_definitions(partvwap_parquet_test PRIVATE 
