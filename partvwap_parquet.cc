@@ -1,3 +1,4 @@
+#include "partvwap_parquet.hh"
 #include "partvwap.hh"
 #include <absl/cleanup/cleanup.h>
 #include <absl/container/flat_hash_map.h>
@@ -20,7 +21,6 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 #include <vector>
-#include "partvwap_parquet.hh"
 
 arrow::Status WriteParquetFromInputRows(std::string filename,
                                         const std::vector<InputRow> &rows,
@@ -72,9 +72,9 @@ arrow::Status WriteParquetFromInputRows(std::string filename,
   return arrow::Status::OK();
 }
 
-arrow::Status
-ReadParquetToInputRows(const std::string &filename,
-                       std::function<arrow::Status(ParquetChunk)> chunk_callback) {
+arrow::Status ReadParquetToInputRows(
+    const std::string &filename,
+    std::function<arrow::Status(ParquetChunk)> chunk_callback) {
   auto reader_props = parquet::ArrowReaderProperties();
 
   reader_props.set_read_dictionary(0, true); // provider column

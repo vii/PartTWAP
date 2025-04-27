@@ -23,7 +23,6 @@
 #include <parquet/arrow/writer.h>
 #include <vector>
 
-
 TEST(ComputeVWAP, BasicThroughParquet) {
   TempFileForTest tmp_file;
   NameToId providers;
@@ -38,7 +37,8 @@ TEST(ComputeVWAP, BasicThroughParquet) {
   std::vector<OutputRow> output_rows;
   ComputeVWAP(
       [&](auto &&f) {
-        ASSERT_OK(ReadManyParquetFiles(std::vector<std::string>{tmp_file.tmp_filename}, f));
+        ASSERT_OK(ReadManyParquetFiles(
+            std::vector<std::string>{tmp_file.tmp_filename}, f));
       },
       [&](const OutputRow &output_row) { output_rows.push_back(output_row); });
 
@@ -72,7 +72,8 @@ static void BM_ComputeVWAPThroughParquet(benchmark::State &state) {
     double sum_twap = 0;
     ComputeVWAP(
         [&](auto &&f) {
-          ASSERT_OK(ReadManyParquetFiles(std::vector<std::string>{tmp_file.tmp_filename}, f));
+          ASSERT_OK(ReadManyParquetFiles(
+              std::vector<std::string>{tmp_file.tmp_filename}, f));
         },
         [&](const OutputRow &output_row) { sum_twap += output_row.twap; });
     benchmark::DoNotOptimize(sum_twap);

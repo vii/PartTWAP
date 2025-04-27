@@ -73,13 +73,13 @@ void WriteTurboPForFromInputRows(std::string filename,
       size_t ts_actual_size;
       if constexpr (sizeof(typename std::remove_cvref_t<
                            decltype(chunk)>::value_type) == 8) {
-        ts_actual_size = bitnpack128v64(reinterpret_cast<uint64_t *>(
-                                            chunk.data()),
-                                        chunk.size(), buffer.data());
+        ts_actual_size =
+            bitnpack128v64(reinterpret_cast<uint64_t *>(chunk.data()),
+                           chunk.size(), buffer.data());
       } else {
-        ts_actual_size = bitnpack256v32(reinterpret_cast<uint32_t *>(
-                                            chunk.data()),
-                                        chunk.size(), buffer.data());
+        ts_actual_size =
+            bitnpack256v32(reinterpret_cast<uint32_t *>(chunk.data()),
+                           chunk.size(), buffer.data());
       }
       LittleEndianInt64(f, ts_actual_size);
       f.write(reinterpret_cast<const char *>(buffer.data()), ts_actual_size);
@@ -145,13 +145,13 @@ void ReadTurboPForFromInputRows(
       if constexpr (sizeof(typename std::remove_cvref_t<
                            decltype(chunk)>::value_type) == 8) {
         bitnunpack128v64(buffer.data(), chunk.size(),
-                        reinterpret_cast<uint64_t *>(chunk.data()));
+                         reinterpret_cast<uint64_t *>(chunk.data()));
       } else {
         static_assert(
             sizeof(typename std::remove_cvref_t<decltype(chunk)>::value_type) ==
             4);
         bitnunpack256v32(buffer.data(), chunk.size(),
-                        reinterpret_cast<uint32_t *>(chunk.data()));
+                         reinterpret_cast<uint32_t *>(chunk.data()));
       }
     };
 
