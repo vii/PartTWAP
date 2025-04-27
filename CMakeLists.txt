@@ -35,6 +35,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(absl)
 
+find_package(Arrow REQUIRED)
+find_package(Parquet REQUIRED)
 
 add_executable(partvwap_test partvwap_test.cc)
 target_link_libraries(partvwap_test
@@ -61,8 +63,8 @@ target_link_libraries(partvwap_parquet_test
     absl::status
     absl::time
     benchmark::benchmark
-    $<$<BOOL:${Arrow_FOUND}>:Arrow::arrow_static>
-    $<$<BOOL:${Parquet_FOUND}>:Parquet::parquet_static>
+    Parquet::parquet_static
+    Arrow::arrow_static
 )
 
 target_compile_definitions(partvwap_parquet_test PRIVATE 
