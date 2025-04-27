@@ -25,11 +25,15 @@ arrow::Status WriteParquetFromInputRows(std::string filename,
 
 arrow::Status
 ReadParquetToInputRows(const std::string &filename,
-                       std::function<arrow::Status(ParquetChunk)> f);
+                       std::function<arrow::Status(ParquetChunk)> f,
+                       NameToId &providers,
+                       NameToId &symbols);
 
 template <typename FilenameContainer, typename RowCallback>
 arrow::Status ReadManyParquetFiles(const FilenameContainer &filenames,
-                                   RowCallback &&f) {
+                                   RowCallback &&f,
+                                   NameToId &providers,
+                                   NameToId &symbols) {
   int64_t last_ts = std::numeric_limits<int64_t>::min();
   for (const auto &filename : filenames) {
     ARROW_RETURN_NOT_OK(ReadParquetToInputRows(
@@ -45,15 +49,17 @@ arrow::Status ReadManyParquetFiles(const FilenameContainer &filenames,
             f(row);
           }
           return arrow::Status::OK();
-        }));
+        },
+        providers,
+        symbols));
   }
   return arrow::Status::OK();
 }
 
 struct ParquetOutputWriter {
   std::shared_ptr<arrow::io::FileOutputStream> outfile;
-  const NameToId &providers;
-  const NameToId &symbols;
+  NameToId &providers;
+  NameToId &symbols;
   int64_t buffered_rows = 0;
 
   arrow::StringBuilder provider_builder;

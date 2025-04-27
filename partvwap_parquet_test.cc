@@ -38,7 +38,8 @@ TEST(ComputeVWAP, BasicThroughParquet) {
   ComputeVWAP(
       [&](auto &&f) {
         ASSERT_OK(ReadManyParquetFiles(
-            std::vector<std::string>{tmp_file.tmp_filename}, f));
+            std::vector<std::string>{tmp_file.tmp_filename}, f,
+            providers, symbols));
       },
       [&](const OutputRow &output_row) { output_rows.push_back(output_row); });
 
@@ -73,7 +74,8 @@ static void BM_ComputeVWAPThroughParquet(benchmark::State &state) {
     ComputeVWAP(
         [&](auto &&f) {
           ASSERT_OK(ReadManyParquetFiles(
-              std::vector<std::string>{tmp_file.tmp_filename}, f));
+              std::vector<std::string>{tmp_file.tmp_filename}, f,
+              providers, symbols));
         },
         [&](const OutputRow &output_row) { sum_twap += output_row.twap; });
     benchmark::DoNotOptimize(sum_twap);

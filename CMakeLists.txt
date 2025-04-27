@@ -72,6 +72,19 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
     target_compile_definitions(partvwap_parquet_test PRIVATE 
         ARROW_DEPRECATION_WARNINGS=0
     )
+
+    add_executable(partvwap_parquet_io partvwap_parquet_io.cc partvwap_parquet.cc)
+    target_include_directories(partvwap_parquet_io PRIVATE ${ARROW_INSTALL_DIR}/include)
+    target_link_directories(partvwap_parquet_io PRIVATE ${ARROW_INSTALL_DIR}/lib64)
+    target_link_libraries(partvwap_parquet_io
+        absl::flat_hash_map
+        absl::strings
+        absl::cleanup
+        absl::status
+        absl::time
+        Arrow::arrow_static
+        Parquet::parquet_static
+    )
 endif()
 
 add_executable(turbo_test turbo_test.cc)

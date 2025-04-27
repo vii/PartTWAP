@@ -10,7 +10,6 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 #include <arrow/testing/gtest_util.h>
-#include <benchmark/benchmark.h>
 #include <cmath>
 #include <cstdint>
 #include <fstream>
@@ -74,7 +73,9 @@ arrow::Status WriteParquetFromInputRows(std::string filename,
 
 arrow::Status ReadParquetToInputRows(
     const std::string &filename,
-    std::function<arrow::Status(ParquetChunk)> chunk_callback) {
+    std::function<arrow::Status(ParquetChunk)> chunk_callback,
+    NameToId &providers,
+    NameToId &symbols) {
   auto reader_props = parquet::ArrowReaderProperties();
 
   reader_props.set_read_dictionary(0, true); // provider column
@@ -91,9 +92,6 @@ arrow::Status ReadParquetToInputRows(
   std::shared_ptr<arrow::RecordBatchReader> rb_reader;
   ARROW_RETURN_NOT_OK(arrow_reader->GetRecordBatchReader(&rb_reader));
 
-  // Create name to ID maps
-  NameToId providers;
-  NameToId symbols;
   // Process record batches
   std::shared_ptr<arrow::RecordBatch> batch;
   while (rb_reader->ReadNext(&batch).ok() && batch != nullptr) {
