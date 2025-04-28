@@ -87,7 +87,7 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
     )
 endif()
 
-add_executable(turbo_test turbo_test.cc)
+add_executable(turbo_test turbo_test.cc partvwap_turbo.cc)
 add_dependencies(turbo_test turbopfor_interface)
 target_include_directories(turbo_test PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
 target_link_libraries(turbo_test
