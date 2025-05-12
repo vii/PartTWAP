@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
   int64_t output_rows = 0;
   ComputeTWAP(
       [&](auto &&row_acceptor) {
-        ReadTurboPForFromInputRows(output_file, [&](const InputRow &row) {
+        ReadTurboPForFromInputRows(output_turbo_file, [&](const InputRow &row) {
           row_acceptor(row);
           input_rows++;
         });
@@ -93,14 +93,14 @@ int main(int argc, char **argv) {
       });
   absl::Time end_time = absl::Now();
   if (!write_status.ok()) {
-    std::cerr << "Error writing output file '" << output_file
+    std::cerr << "Error writing output file '" << output_parquet_file
               << "': " << write_status.ToString() << std::endl;
     return 1;
   }
 
   auto close_status = writer.CloseOutputFile();
   if (!close_status.ok()) {
-    std::cerr << "Error closing output file '" << output_file
+    std::cerr << "Error closing output file '" << output_parquet_file
               << "': " << close_status.ToString() << std::endl;
     return 1;
   }
