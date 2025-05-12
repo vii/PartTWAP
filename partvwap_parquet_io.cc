@@ -94,9 +94,10 @@ int main(int argc, char **argv) {
 
   std::cout << "Successfully processed " << input_rows << " rows; wrote "
             << output_rows << " results to " << output_file << std::endl;
-  std::cout << "Time taken to compute VWAP: "
+  std::cout << "Time taken to compute TWAP: "
             << absl::FormatDuration(end_time - start_time) << std::endl
             << "Per input row " << (end_time - start_time) / input_rows
+            << std::endl
             << "Total seconds " << absl::ToDoubleSeconds(end_time - start_time)
             << std::endl;
 

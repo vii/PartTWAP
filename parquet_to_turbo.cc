@@ -9,9 +9,9 @@
 #include <vector>
 
 int main(int argc, char **argv) {
-  if (argc != 3) {
+  if (argc != 4) {
     std::cerr << "Usage: " << argv[0]
-              << " <input_dir> <output_file> <output_parquet_file>"
+              << " <input_dir> <output_turbo_file> <output_parquet_file>"
               << std::endl;
     std::cerr
         << "This program reads parquet files from <input_dir> and writes a "
@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
   }
 
   std::string input_dir = argv[1];
-  std::string output_file = argv[2];
+  std::string output_turbo_file = argv[2];
   std::string output_parquet_file = argv[3];
 
   if (!std::filesystem::exists(input_dir) ||
@@ -57,10 +57,15 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  WriteTurboPForFromInputRows(output_file, rows, providers, symbols);
+  absl::Time turbo_start_time = absl::Now();
+  WriteTurboPForFromInputRows(output_turbo_file, rows, providers, symbols);
+  absl::Time turbo_end_time = absl::Now();
 
   std::cout << "Successfully converted " << rows.size()
-            << " rows to turbo file " << output_file << std::endl;
+            << " rows to turbo file " << output_turbo_file << std::endl;
+  std::cout << "Time taken to write turbo file: "
+            << absl::FormatDuration(turbo_end_time - turbo_start_time)
+            << std::endl;
 
   ParquetOutputWriter writer{.providers = providers, .symbols = symbols};
 
@@ -106,6 +111,7 @@ int main(int argc, char **argv) {
   std::cout << "Time taken to compute TWAP: "
             << absl::FormatDuration(end_time - start_time) << std::endl
             << "Per input row " << (end_time - start_time) / input_rows
+            << std::endl
             << "Total seconds " << absl::ToDoubleSeconds(end_time - start_time)
             << std::endl;
 
