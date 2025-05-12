@@ -69,7 +69,7 @@ struct TWAPState {
 };
 
 template <typename InputRowProvider, typename OutputRowSink>
-void ComputeVWAP(InputRowProvider &&input_row_provider,
+void ComputeTWAP(InputRowProvider &&input_row_provider,
                  OutputRowSink &&output_row_sink,
                  int64_t window_nanos = 15ll * 1000 * 1000 * 1000) {
   std::vector<std::vector<TWAPState>> provider_to_symbol_to_twap;

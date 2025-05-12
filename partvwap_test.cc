@@ -16,19 +16,19 @@
 #include "partvwap.hh"
 #include "temp_file_for_test.hh"
 
-TEST(ComputeVWAP, Basic) {
+TEST(ComputeTWAP, Basic) {
   std::vector<OutputRow> output_rows;
-  ComputeVWAP(
+  ComputeTWAP(
       [&](auto &&f) { f(InputRow{1000000000001, 17, 23, 100.0}); },
       [&](const OutputRow &output_row) { output_rows.push_back(output_row); });
   EXPECT_THAT(output_rows,
               testing::ElementsAre(OutputRow{1005000000000, 17, 23, 100.0}));
 };
 
-static void BM_ComputeVWAP(benchmark::State &state) {
+static void BM_ComputeTWAP(benchmark::State &state) {
   for (auto _ : state) {
     double sum_price = 0;
-    ComputeVWAP(
+    ComputeTWAP(
         [&](auto &&f) {
           // Simulate processing multiple price updates
           for (int i = 0; i < 1000; i++) {
@@ -43,14 +43,14 @@ static void BM_ComputeVWAP(benchmark::State &state) {
   }
   state.SetItemsProcessed(state.iterations() * 1000);
 }
-BENCHMARK(BM_ComputeVWAP);
+BENCHMARK(BM_ComputeTWAP);
 
 TEST(Benchmarks, RunAll) { ::benchmark::RunSpecifiedBenchmarks("all"); }
 
 int real_main() {
   NameToId providers;
   NameToId symbols;
-  ComputeVWAP(
+  ComputeTWAP(
       [&](auto &&f) {
         f(InputRow{1000000000000, providers.IDFromName("provider1"),
                    symbols.IDFromName("symbol1"), 100.0});

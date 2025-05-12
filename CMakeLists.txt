@@ -85,6 +85,22 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         Arrow::arrow_static
         Parquet::parquet_static
     )
+
+    add_executable(parquet_to_turbo parquet_to_turbo.cc partvwap_parquet.cc partvwap_turbo.cc)
+    target_include_directories(parquet_to_turbo PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
+    target_include_directories(parquet_to_turbo PRIVATE ${ARROW_INSTALL_DIR}/include)
+    target_link_directories(parquet_to_turbo PRIVATE ${ARROW_INSTALL_DIR}/lib64)
+    target_link_libraries(parquet_to_turbo
+        turbopfor_interface
+        Arrow::arrow_static
+        Parquet::parquet_static
+        absl::flat_hash_map
+        absl::strings
+        absl::cleanup
+        absl::status
+        absl::time
+    )
+    
 endif()
 
 add_executable(turbo_test turbo_test.cc partvwap_turbo.cc)

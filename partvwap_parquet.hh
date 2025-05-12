@@ -26,18 +26,17 @@ arrow::Status WriteParquetFromInputRows(std::string filename,
 arrow::Status
 ReadParquetToInputRows(const std::string &filename,
                        std::function<arrow::Status(ParquetChunk)> f,
-                       NameToId &providers,
-                       NameToId &symbols);
+                       NameToId &providers, NameToId &symbols);
 
 template <typename FilenameContainer, typename RowCallback>
 arrow::Status ReadManyParquetFiles(const FilenameContainer &filenames,
-                                   RowCallback &&f,
-                                   NameToId &providers,
+                                   RowCallback &&f, NameToId &providers,
                                    NameToId &symbols) {
   int64_t last_ts = std::numeric_limits<int64_t>::min();
   for (const auto &filename : filenames) {
     ARROW_RETURN_NOT_OK(ReadParquetToInputRows(
-        filename, [&](ParquetChunk chunk) -> arrow::Status {
+        filename,
+        [&](ParquetChunk chunk) -> arrow::Status {
           for (int64_t i = 0; i < chunk.num_rows; i++) {
             int64_t ts = chunk.timestamp_array->Value(i);
             assert(ts >= last_ts);
@@ -46,12 +45,15 @@ arrow::Status ReadManyParquetFiles(const FilenameContainer &filenames,
                 ts, static_cast<uint32_t>(chunk.provider_indices->Value(i)),
                 static_cast<uint32_t>(chunk.symbol_indices->Value(i)),
                 chunk.price_array->Value(i)};
-            f(row);
+            if constexpr (std::is_void_v<decltype(f(row))>) {
+              f(row);
+            } else {
+              ARROW_RETURN_NOT_OK(f(row));
+            }
           }
           return arrow::Status::OK();
         },
-        providers,
-        symbols));
+        providers, symbols));
   }
   return arrow::Status::OK();
 }

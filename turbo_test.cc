@@ -18,7 +18,7 @@
 #include "partvwap_turbo.hh"
 #include "temp_file_for_test.hh"
 
-TEST(ComputeVWAP, InputRowsRoundTrip) {
+TEST(ComputeTWAP, InputRowsRoundTrip) {
   std::vector<InputRow> input_rows;
   TempFileForTest tmp_file;
   input_rows.reserve(1000);
@@ -62,7 +62,7 @@ static void BM_TurboPForCompression(benchmark::State &state) {
   for (auto _ : state) {
     // Read back and compute VWAP
     double sum_twap = 0;
-    ComputeVWAP(
+    ComputeTWAP(
         [&](auto &&f) { ReadTurboPForFromInputRows(tmp_file.tmp_filename, f); },
         [&](const OutputRow &output_row) { sum_twap += output_row.twap; });
     benchmark::DoNotOptimize(sum_twap);

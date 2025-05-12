@@ -1,5 +1,7 @@
 #include "partvwap.hh"
 #include "partvwap_parquet.hh"
+#include "partvwap_turbo.hh"
+
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <filesystem>
@@ -8,19 +10,20 @@
 
 int main(int argc, char **argv) {
   if (argc != 3) {
-    std::cerr << "Usage: " << argv[0] << " <input_dir> <output_file>"
+    std::cerr << "Usage: " << argv[0]
+              << " <input_dir> <output_file> <output_parquet_file>"
               << std::endl;
-    std::cerr << "This program reads parquet files from <input_dir>, computes "
-                 "volume-weighted average prices (VWAP)"
-              << std::endl;
-    std::cerr << "for each provider and symbol combination, and writes the "
-                 "results to <output_file> in parquet format."
-              << std::endl;
+    std::cerr
+        << "This program reads parquet files from <input_dir> and writes a "
+           "turbo file to <output_file>; and then writes the VWAP results to "
+           "<output_parquet_file>."
+        << std::endl;
     return 1;
   }
 
   std::string input_dir = argv[1];
   std::string output_file = argv[2];
+  std::string output_parquet_file = argv[3];
 
   if (!std::filesystem::exists(input_dir) ||
       !std::filesystem::is_directory(input_dir)) {
@@ -42,31 +45,42 @@ int main(int argc, char **argv) {
 
   NameToId providers;
   NameToId symbols;
+  std::vector<InputRow> rows;
+
+  arrow::Status read_status = ReadManyParquetFiles(
+      parquet_files, [&](const InputRow &row) { rows.push_back(row); },
+      providers, symbols);
+
+  if (!read_status.ok()) {
+    std::cerr << "Error reading parquet files from directory '" << input_dir
+              << "': " << read_status.ToString() << std::endl;
+    return 1;
+  }
+
+  WriteTurboPForFromInputRows(output_file, rows, providers, symbols);
+
+  std::cout << "Successfully converted " << rows.size()
+            << " rows to turbo file " << output_file << std::endl;
+
   ParquetOutputWriter writer{.providers = providers, .symbols = symbols};
 
-  auto open_status = writer.OpenOutputFile(output_file);
+  auto open_status = writer.OpenOutputFile(output_parquet_file);
   if (!open_status.ok()) {
-    std::cerr << "Error opening output file '" << output_file
+    std::cerr << "Error opening output file '" << output_parquet_file
               << "': " << open_status.ToString() << std::endl;
     return 1;
   }
 
-  arrow::Status read_status;
   arrow::Status write_status;
   absl::Time start_time = absl::Now();
   int64_t input_rows = 0;
   int64_t output_rows = 0;
   ComputeTWAP(
       [&](auto &&row_acceptor) {
-        // Read all parquet files and process the data
-        read_status &= ReadManyParquetFiles(
-            parquet_files,
-            [&](const InputRow &row) -> arrow::Status {
-              row_acceptor(row);
-              input_rows++;
-              return arrow::Status::OK();
-            },
-            providers, symbols);
+        ReadTurboPForFromInputRows(output_file, [&](const InputRow &row) {
+          row_acceptor(row);
+          input_rows++;
+        });
       },
       [&](const OutputRow &row) {
         output_rows++;
@@ -79,12 +93,6 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  if (!read_status.ok()) {
-    std::cerr << "Error reading parquet files from directory '" << input_dir
-              << "': " << read_status.ToString() << std::endl;
-    return 1;
-  }
-
   auto close_status = writer.CloseOutputFile();
   if (!close_status.ok()) {
     std::cerr << "Error closing output file '" << output_file
@@ -93,8 +101,9 @@ int main(int argc, char **argv) {
   }
 
   std::cout << "Successfully processed " << input_rows << " rows; wrote "
-            << output_rows << " results to " << output_file << std::endl;
-  std::cout << "Time taken to compute VWAP: "
+            << output_rows << " results to " << output_parquet_file
+            << std::endl;
+  std::cout << "Time taken to compute TWAP: "
             << absl::FormatDuration(end_time - start_time) << std::endl
             << "Per input row " << (end_time - start_time) / input_rows
             << "Total seconds " << absl::ToDoubleSeconds(end_time - start_time)

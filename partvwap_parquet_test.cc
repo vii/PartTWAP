@@ -23,7 +23,7 @@
 #include <parquet/arrow/writer.h>
 #include <vector>
 
-TEST(ComputeVWAP, BasicThroughParquet) {
+TEST(ComputeTWAP, BasicThroughParquet) {
   TempFileForTest tmp_file;
   NameToId providers;
   NameToId symbols;
@@ -35,11 +35,11 @@ TEST(ComputeVWAP, BasicThroughParquet) {
 
   // Read back and compute VWAP
   std::vector<OutputRow> output_rows;
-  ComputeVWAP(
+  ComputeTWAP(
       [&](auto &&f) {
         ASSERT_OK(ReadManyParquetFiles(
-            std::vector<std::string>{tmp_file.tmp_filename}, f,
-            providers, symbols));
+            std::vector<std::string>{tmp_file.tmp_filename}, f, providers,
+            symbols));
       },
       [&](const OutputRow &output_row) { output_rows.push_back(output_row); });
 
@@ -48,7 +48,7 @@ TEST(ComputeVWAP, BasicThroughParquet) {
               testing::ElementsAre(OutputRow{1005000000000, 0, 0, 100.0}));
 };
 
-static void BM_ComputeVWAPThroughParquet(benchmark::State &state) {
+static void BM_ComputeTWAPThroughParquet(benchmark::State &state) {
   TempFileForTest tmp_file;
   NameToId providers;
   NameToId symbols;
@@ -71,11 +71,11 @@ static void BM_ComputeVWAPThroughParquet(benchmark::State &state) {
   for (auto _ : state) {
     // Read back and compute VWAP
     double sum_twap = 0;
-    ComputeVWAP(
+    ComputeTWAP(
         [&](auto &&f) {
           ASSERT_OK(ReadManyParquetFiles(
-              std::vector<std::string>{tmp_file.tmp_filename}, f,
-              providers, symbols));
+              std::vector<std::string>{tmp_file.tmp_filename}, f, providers,
+              symbols));
         },
         [&](const OutputRow &output_row) { sum_twap += output_row.twap; });
     benchmark::DoNotOptimize(sum_twap);
@@ -83,6 +83,6 @@ static void BM_ComputeVWAPThroughParquet(benchmark::State &state) {
 
   state.SetItemsProcessed(state.iterations() * input_rows.size());
 }
-BENCHMARK(BM_ComputeVWAPThroughParquet);
+BENCHMARK(BM_ComputeTWAPThroughParquet);
 
 TEST(Benchmarks, RunAll) { ::benchmark::RunSpecifiedBenchmarks("all"); }
