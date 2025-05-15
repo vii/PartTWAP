@@ -105,6 +105,7 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
 
     add_executable(partvwap_parquet_integration_test
         partvwap_parquet_integration_test.cc
+        run_command_for_test.cc
     )
     target_include_directories(partvwap_parquet_integration_test PRIVATE ${ARROW_INSTALL_DIR}/include)
     target_link_directories(partvwap_parquet_integration_test PRIVATE ${ARROW_INSTALL_DIR}/lib64)
@@ -124,6 +125,8 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         ARROW_DEPRECATION_WARNINGS=0
     )
 
+
+
     add_executable(parquet_to_turbo parquet_to_turbo.cc partvwap_parquet.cc partvwap_turbo.cc)
     target_include_directories(parquet_to_turbo PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
     target_include_directories(parquet_to_turbo PRIVATE ${ARROW_INSTALL_DIR}/include)
@@ -138,6 +141,33 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         absl::status
         absl::time
     )
+
+    add_executable(parquet_to_turbo_integration_test
+        parquet_to_turbo_integration_test.cc
+        run_command_for_test.cc
+        partvwap_parquet.cc
+        partvwap_turbo.cc
+    )
+    target_include_directories(parquet_to_turbo_integration_test PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
+    target_include_directories(parquet_to_turbo_integration_test PRIVATE ${ARROW_INSTALL_DIR}/include)
+    target_link_directories(parquet_to_turbo_integration_test PRIVATE ${ARROW_INSTALL_DIR}/lib64)
+    target_link_libraries(parquet_to_turbo_integration_test
+        turbopfor_interface
+        GTest::gtest_main
+        GTest::gmock_main
+        absl::flat_hash_map
+        absl::strings
+        absl::cleanup
+        absl::status
+        absl::time
+        Arrow::arrow_static
+        Parquet::parquet_static
+    )
+
+    target_compile_definitions(parquet_to_turbo_integration_test PRIVATE
+        ARROW_DEPRECATION_WARNINGS=0
+    )
+
 
 endif()
 
