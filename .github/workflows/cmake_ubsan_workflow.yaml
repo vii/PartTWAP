@@ -1,4 +1,4 @@
-name: CMake CI workflow name
+name: CMake UBSAN workflow name
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Configure project
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,leak,undefined"
 
       - name: Build
         run: make -C build -j4
