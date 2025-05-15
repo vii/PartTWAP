@@ -14,6 +14,7 @@
 #include <benchmark/benchmark.h>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

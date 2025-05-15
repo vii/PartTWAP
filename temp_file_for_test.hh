@@ -1,9 +1,14 @@
 #pragma once
 
-#include <absl/strings/string_view.h>
+#include <cerrno>
+#include <cstring>
+#include <exception>
+#include <filesystem>
 #include <iostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <unistd.h>
-#include <vector>
 
 struct TempFileForTest {
   int tmp_fd;
@@ -27,4 +32,31 @@ struct TempFileForTest {
       std::remove(tmp_filename.c_str());
     }
   }
+
+  operator std::string_view() const { return tmp_filename; }
+};
+
+struct TempDirectoryForTest {
+  std::string tmp_dirname;
+
+  TempDirectoryForTest() {
+    char tmp_dir_template[] = "/tmp/partvwap_test_dir_XXXXXX";
+    if (mkdtemp(tmp_dir_template) == nullptr) {
+      throw std::runtime_error("Failed to create temporary directory");
+    }
+    tmp_dirname = tmp_dir_template;
+  }
+
+  ~TempDirectoryForTest() {
+    if (!tmp_dirname.empty()) {
+      try {
+        std::filesystem::remove_all(tmp_dirname);
+      } catch (const std::exception &e) {
+        std::cerr << "Error removing temporary directory " << tmp_dirname
+                  << ": " << e.what() << std::endl;
+      }
+    }
+  }
+
+  operator std::string_view() const { return tmp_dirname; }
 };

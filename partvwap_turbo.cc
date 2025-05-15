@@ -1,4 +1,5 @@
 #include "ic.h"
+#include <absl/cleanup/cleanup.h>
 #include <absl/container/flat_hash_map.h>
 #include <absl/status/status.h>
 #include <absl/strings/str_cat.h>
@@ -6,9 +7,13 @@
 #include <absl/time/time.h>
 #include <cmath>
 #include <cstdint>
+#include <fcntl.h>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 #include "partvwap.hh"
@@ -28,9 +33,19 @@ int64_t ReadLittleEndianInt64(std::istream &is) {
   }
   return value;
 }
+
+int64_t ReadLittleEndianInt64(const char *data) {
+  int64_t value = 0;
+  for (int i = 0; i < 8; ++i) {
+    value |= static_cast<int64_t>(static_cast<unsigned char>(data[i]))
+             << (i * 8);
+  }
+  return value;
+}
+
 } // namespace
 
-void WriteTurboPForFromInputRows(std::string filename,
+void WriteTurboPForFromInputRows(const char *filename,
                                  const std::vector<InputRow> &rows,
                                  const NameToId &providers,
                                  const NameToId &symbols,
@@ -100,13 +115,56 @@ void WriteTurboPForFromInputRows(std::string filename,
 }
 
 void ReadTurboPForFromInputRows(
-    const std::string &filename,
-    std::function<void(const InputRow &)> row_callback) {
-  std::ifstream f(filename);
-  if (!f.good()) {
-    throw std::runtime_error(absl::StrCat("Failed to open file: ", filename));
+    const char *filename, std::function<void(const InputRow &)> row_callback) {
+  // Create a std::string for null-terminated c_str() for open()
+
+  int fd = open(filename, O_RDONLY);
+  if (fd == -1) {
+    throw std::runtime_error(absl::StrCat("Failed to open file '", filename,
+                                          "': ", strerror(errno)));
   }
-  int64_t num_rows = ReadLittleEndianInt64(f);
+  absl::Cleanup fd_closer = [fd] { close(fd); };
+
+  struct stat sb;
+  if (fstat(fd, &sb) == -1) {
+    throw std::runtime_error(absl::StrCat("Failed to fstat file '", filename,
+                                          "': ", strerror(errno)));
+  }
+  const size_t file_size = sb.st_size;
+
+  void *mmap_base_ptr = nullptr;
+
+  if (file_size > 0) {
+    mmap_base_ptr = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (mmap_base_ptr == MAP_FAILED || mmap_base_ptr == nullptr) {
+      throw std::runtime_error(absl::StrCat("Failed to mmap file '", filename,
+                                            "': ", strerror(errno)));
+    }
+  }
+
+  absl::Cleanup unmapper = [&] {
+    if (munmap(mmap_base_ptr, file_size) != 0) {
+      throw std::runtime_error(absl::StrCat("Failed to munmap file '", filename,
+                                            "': ", strerror(errno)));
+    }
+  };
+
+  const char *p = static_cast<const char *>(mmap_base_ptr);
+  size_t remaining = file_size;
+
+  auto ConsumeBytes = [&](size_t n) {
+    if (remaining < n) {
+      throw std::runtime_error(absl::StrCat("Needed ", n, " bytes from file '",
+                                            filename, " size ", file_size,
+                                            " remaining ", remaining));
+    }
+    remaining -= n;
+    const char *old_p = p;
+    p += n;
+    return old_p;
+  };
+
+  int64_t num_rows = ReadLittleEndianInt64(ConsumeBytes(8));
 
   std::vector<int64_t> timestamp_chunk;
   std::vector<uint32_t> provider_chunk;
@@ -115,40 +173,28 @@ void ReadTurboPForFromInputRows(
 
   std::vector<unsigned char> buffer;
   while (num_rows > 0) {
-    int64_t chunk_size = ReadLittleEndianInt64(f);
-    if (!f.good()) {
-      throw std::runtime_error(
-          absl::StrCat("Failed to read chunk size from file: ", filename));
-    }
-
+    int64_t chunk_size = ReadLittleEndianInt64(ConsumeBytes(8));
     timestamp_chunk.resize(chunk_size);
     provider_chunk.resize(chunk_size);
     symbol_chunk.resize(chunk_size);
     price_chunk.resize(chunk_size);
 
     auto read_buffer = [&](auto &chunk) {
-      int64_t ts_actual_size = ReadLittleEndianInt64(f);
-      if (!f.good()) {
-        throw std::runtime_error(absl::StrCat(
-            "Failed to read timestamp chunksize from file: ", filename));
-      }
+      int64_t ts_actual_size = ReadLittleEndianInt64(ConsumeBytes(8));
 
-      buffer.clear();
-      buffer.resize(ts_actual_size);
-      f.read(reinterpret_cast<char *>(buffer.data()), ts_actual_size);
-      if (!f.good()) {
-        throw std::runtime_error(absl::StrCat(
-            "Failed to read timestamp data from file: ", filename));
-      }
       if constexpr (sizeof(typename std::remove_cvref_t<
                            decltype(chunk)>::value_type) == 8) {
-        bitnunpack128v64(buffer.data(), chunk.size(),
+        bitnunpack128v64(reinterpret_cast<unsigned char *>(
+                             const_cast<char *>(ConsumeBytes(ts_actual_size))),
+                         chunk.size(),
                          reinterpret_cast<uint64_t *>(chunk.data()));
       } else {
         static_assert(
             sizeof(typename std::remove_cvref_t<decltype(chunk)>::value_type) ==
             4);
-        bitnunpack256v32(buffer.data(), chunk.size(),
+        bitnunpack256v32(reinterpret_cast<unsigned char *>(
+                             const_cast<char *>(ConsumeBytes(ts_actual_size))),
+                         chunk.size(),
                          reinterpret_cast<uint32_t *>(chunk.data()));
       }
     };

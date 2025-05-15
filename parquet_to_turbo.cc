@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
   }
 
   std::string input_dir = argv[1];
-  std::string output_turbo_file = argv[2];
+  const char *output_turbo_file = argv[2];
   std::string output_parquet_file = argv[3];
 
   if (!std::filesystem::exists(input_dir) ||

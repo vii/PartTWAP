@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 
-int main(int argc, char **argv) {
+int partvwap_parquet_io_main(int argc, char **argv) {
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " <input_dir> <output_file>"
               << std::endl;
@@ -103,3 +103,5 @@ int main(int argc, char **argv) {
 
   return 0;
 }
+
+int main(int argc, char **argv) { return partvwap_parquet_io_main(argc, argv); }

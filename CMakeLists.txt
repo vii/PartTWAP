@@ -69,7 +69,7 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         Parquet::parquet_static
     )
 
-    target_compile_definitions(partvwap_parquet_test PRIVATE 
+    target_compile_definitions(partvwap_parquet_test PRIVATE
         ARROW_DEPRECATION_WARNINGS=0
     )
 
@@ -86,6 +86,44 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         Parquet::parquet_static
     )
 
+    add_executable(create_test_parquet create_test_parquet.cc partvwap_parquet.cc)
+    target_include_directories(create_test_parquet PRIVATE ${ARROW_INSTALL_DIR}/include)
+    target_link_directories(create_test_parquet PRIVATE ${ARROW_INSTALL_DIR}/lib64)
+    target_link_libraries(create_test_parquet
+        absl::flat_hash_map
+        absl::strings
+        absl::cleanup
+        absl::status
+        absl::time
+        Arrow::arrow_static
+        Parquet::parquet_static
+    )
+
+    target_compile_definitions(create_test_parquet PRIVATE
+        ARROW_DEPRECATION_WARNINGS=0
+    )
+
+    add_executable(partvwap_parquet_integration_test
+        partvwap_parquet_integration_test.cc
+    )
+    target_include_directories(partvwap_parquet_integration_test PRIVATE ${ARROW_INSTALL_DIR}/include)
+    target_link_directories(partvwap_parquet_integration_test PRIVATE ${ARROW_INSTALL_DIR}/lib64)
+    target_link_libraries(partvwap_parquet_integration_test
+        GTest::gtest_main
+        GTest::gmock_main
+        absl::flat_hash_map
+        absl::strings
+        absl::cleanup
+        absl::status
+        absl::time
+        Arrow::arrow_static
+        Parquet::parquet_static
+    )
+
+    target_compile_definitions(partvwap_parquet_integration_test PRIVATE
+        ARROW_DEPRECATION_WARNINGS=0
+    )
+
     add_executable(parquet_to_turbo parquet_to_turbo.cc partvwap_parquet.cc partvwap_turbo.cc)
     target_include_directories(parquet_to_turbo PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
     target_include_directories(parquet_to_turbo PRIVATE ${ARROW_INSTALL_DIR}/include)
@@ -100,7 +138,7 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         absl::status
         absl::time
     )
-    
+
 endif()
 
 add_executable(turbo_test turbo_test.cc partvwap_turbo.cc)
@@ -122,4 +160,5 @@ enable_testing()
 
 add_test(NAME partvwap_test COMMAND partvwap_test)
 add_test(NAME partvwap_parquet_test COMMAND partvwap_parquet_test)
+add_test(NAME partvwap_parquet_integration_test COMMAND partvwap_parquet_integration_test)
 add_test(NAME turbo_test COMMAND turbo_test)
