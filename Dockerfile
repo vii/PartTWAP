@@ -22,7 +22,8 @@ RUN apt-get install -y libboost-all-dev libthrift-dev cmake \
     libgrpc-dev \
     libgrpc++-dev \
     protobuf-compiler-grpc \
-    libre2-dev
+    libre2-dev \
+    clang
 
 # Clone and build Arrow
 RUN cd /tmp && git clone https://github.com/apache/arrow.git -b apache-arrow-19.0.1 && \
