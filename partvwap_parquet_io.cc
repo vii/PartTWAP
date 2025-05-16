@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
 
   NameToId providers;
   NameToId symbols;
-  ParquetOutputWriter writer{.providers = providers, .symbols = symbols};
+  ParquetOutputWriter writer(providers, symbols);
 
   auto open_status = writer.OpenOutputFile(output_file);
   if (!open_status.ok()) {

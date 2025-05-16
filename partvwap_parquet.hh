@@ -64,6 +64,9 @@ struct ParquetOutputWriter {
   NameToId &symbols;
   int64_t buffered_rows = 0;
 
+  explicit ParquetOutputWriter(NameToId &providers, NameToId &symbols)
+      : providers(providers), symbols(symbols) {}
+
   arrow::StringBuilder provider_builder;
   arrow::StringBuilder symbol_builder;
   arrow::Int64Builder timestamp_builder;

@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
               << std::endl;
   }
 
-  ParquetOutputWriter writer{.providers = providers, .symbols = symbols};
+  ParquetOutputWriter writer(providers, symbols);
 
   auto open_status = writer.OpenOutputFile(output_parquet_file);
   if (!open_status.ok()) {
