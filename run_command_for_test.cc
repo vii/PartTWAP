@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <sys/wait.h>
 
-std::string RunCommandForTest(const char* cmd) {
+std::string RunCommandForTest(const char *cmd) {
   std::cout << "Running command: " << cmd << std::endl;
   std::array<char, 4096> buffer;
   std::string result;
@@ -28,7 +28,7 @@ std::string RunCommandForTest(const char* cmd) {
   }
 
   if (std::ferror(pipe)) {
-    throw std::runtime_error(absl::StrCat("Error reading from command: ", cmd,  
+    throw std::runtime_error(absl::StrCat("Error reading from command: ", cmd,
                                           " error: ", strerror(errno),
                                           " (errno: ", errno, ")"));
   }
@@ -47,7 +47,7 @@ std::string RunCommandForTest(const char* cmd) {
   if (WEXITSTATUS(cmd_status) != 0) {
     throw std::runtime_error(
         absl::StrCat("Command ", cmd, " exited with non-zero status: ",
-                      WEXITSTATUS(cmd_status), "\n", result));
+                     WEXITSTATUS(cmd_status), "\n", result));
   }
   return result;
-} 
+}

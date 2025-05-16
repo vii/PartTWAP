@@ -48,7 +48,7 @@ int create_test_parquet_main(int argc, char **argv) {
     input_rows.reserve(1000); // 1000 rows per file
 
     // Create rows with varying timestamps, providers, symbols and prices
-    for (int64_t i = 0; i < 3*1000*1000; i++) {
+    for (int64_t i = 0; i < 3 * 1000 * 1000; i++) {
       input_rows.push_back(InputRow{
           1000000000000 + i * 1000000, // Timestamps 1ms apart
           providers.IDFromName("provider" +
