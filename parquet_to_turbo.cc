@@ -57,15 +57,21 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  absl::Time turbo_start_time = absl::Now();
-  WriteTurboPForFromInputRows(output_turbo_file, rows, providers, symbols);
-  absl::Time turbo_end_time = absl::Now();
+  if (!std::filesystem::exists(output_turbo_file) ||
+      std::filesystem::file_size(output_turbo_file) == 0) {
+    absl::Time turbo_start_time = absl::Now();
+    WriteTurboPForFromInputRows(output_turbo_file, rows, providers, symbols);
+    absl::Time turbo_end_time = absl::Now();
 
-  std::cout << "Successfully converted " << rows.size()
-            << " rows to turbo file " << output_turbo_file << std::endl;
-  std::cout << "Time taken to write turbo file: "
-            << absl::FormatDuration(turbo_end_time - turbo_start_time)
-            << std::endl;
+    std::cout << "Successfully converted " << rows.size()
+              << " rows to turbo file " << output_turbo_file << std::endl;
+    std::cout << "Time taken to write turbo file: "
+              << absl::FormatDuration(turbo_end_time - turbo_start_time)
+              << std::endl;
+  } else {
+    std::cout << "Turbo file already exists: " << output_turbo_file
+              << std::endl;
+  }
 
   ParquetOutputWriter writer{.providers = providers, .symbols = symbols};
 

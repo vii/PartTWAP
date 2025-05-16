@@ -89,6 +89,7 @@ void WriteTurboPForFromInputRows(const char *filename,
     throw std::runtime_error(
         absl::StrCat("Failed to write TurboPFor data to file: ", filename));
   }
+
   f.close();
   if (f.fail()) {
     throw std::runtime_error(absl::StrCat("Failed to close file: ", filename));
