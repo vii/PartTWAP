@@ -54,7 +54,7 @@ int create_test_parquet_main(int argc, char **argv) {
           providers.IDFromName("provider" +
                                std::to_string(i % 3)),            // 3 providers
           symbols.IDFromName("symbol" + std::to_string(i % 103)), // 103 symbols
-          1 + (i % 17) // Prices varying from 1-17
+          static_cast<double>(1 + (i % 17)) // Prices varying from 1-17
       });
     }
 
