@@ -2,15 +2,24 @@
 #include "partvwap_parquet.hh"
 #include "partvwap_turbo.hh"
 
+#include <absl/flags/flag.h>
+#include <absl/flags/parse.h>
+#include <absl/time/time.h>
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <filesystem>
 #include <iostream>
 #include <vector>
 
+ABSL_FLAG(absl::Duration, repeat_turbo_decode_duration, absl::ZeroDuration(),
+          "Duration to keep repreating the turbo decode so a profile can be "
+          "collected");
+
 int main(int argc, char **argv) {
-  if (argc != 4) {
-    std::cerr << "Usage: " << argv[0]
+  std::vector<char*> args = absl::ParseCommandLine(argc, argv);
+
+  if (args.size() != 4) {
+    std::cerr << "Usage: " << args[0]
               << " <input_dir> <output_turbo_file> <output_parquet_file>"
               << std::endl;
     std::cerr
@@ -21,9 +30,9 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::string input_dir = argv[1];
-  const char *output_turbo_file = argv[2];
-  std::string output_parquet_file = argv[3];
+  std::string input_dir = args[1];
+  const char *output_turbo_file = args[2];
+  std::string output_parquet_file = args[3];
 
   if (!std::filesystem::exists(input_dir) ||
       !std::filesystem::is_directory(input_dir)) {
@@ -73,43 +82,52 @@ int main(int argc, char **argv) {
               << std::endl;
   }
 
-  ParquetOutputWriter writer(providers, symbols);
+  absl::Time turbo_decode_start_time = absl::Now();
+  absl::Time start_time;
+  absl::Time end_time;
+  int64_t input_rows;
+  int64_t output_rows;
+  do {
 
-  auto open_status = writer.OpenOutputFile(output_parquet_file);
-  if (!open_status.ok()) {
-    std::cerr << "Error opening output file '" << output_parquet_file
-              << "': " << open_status.ToString() << std::endl;
-    return 1;
-  }
+    ParquetOutputWriter writer(providers, symbols);
 
-  arrow::Status write_status;
-  absl::Time start_time = absl::Now();
-  int64_t input_rows = 0;
-  int64_t output_rows = 0;
-  ComputeTWAP(
-      [&](auto &&row_acceptor) {
-        ReadTurboPForFromInputRows(output_turbo_file, [&](const InputRow &row) {
-          row_acceptor(row);
-          input_rows++;
+    auto open_status = writer.OpenOutputFile(output_parquet_file);
+    if (!open_status.ok()) {
+      std::cerr << "Error opening output file '" << output_parquet_file
+                << "': " << open_status.ToString() << std::endl;
+      return 1;
+    }
+
+    arrow::Status write_status;
+    start_time = absl::Now();
+    input_rows = 0;
+    output_rows = 0;
+    ComputeTWAP(
+        [&](auto &&row_acceptor) {
+          ReadTurboPForFromInputRows(output_turbo_file,
+                                     [&](const InputRow &row) {
+                                       row_acceptor(row);
+                                       input_rows++;
+                                     });
+        },
+        [&](const OutputRow &row) {
+          output_rows++;
+          write_status &= writer.AppendOutputRow(row);
         });
-      },
-      [&](const OutputRow &row) {
-        output_rows++;
-        write_status &= writer.AppendOutputRow(row);
-      });
-  absl::Time end_time = absl::Now();
-  if (!write_status.ok()) {
-    std::cerr << "Error writing output file '" << output_parquet_file
-              << "': " << write_status.ToString() << std::endl;
-    return 1;
-  }
-
-  auto close_status = writer.CloseOutputFile();
-  if (!close_status.ok()) {
-    std::cerr << "Error closing output file '" << output_parquet_file
-              << "': " << close_status.ToString() << std::endl;
-    return 1;
-  }
+    end_time = absl::Now();
+    if (!write_status.ok()) {
+      std::cerr << "Error writing output file '" << output_parquet_file
+                << "': " << write_status.ToString() << std::endl;
+      return 1;
+    }
+    auto close_status = writer.CloseOutputFile();
+    if (!close_status.ok()) {
+      std::cerr << "Error closing output file '" << output_parquet_file
+                << "': " << close_status.ToString() << std::endl;
+      return 1;
+    }
+  } while (absl::Now() - turbo_decode_start_time <
+           absl::GetFlag(FLAGS_repeat_turbo_decode_duration));
 
   std::cout << "Successfully processed " << input_rows << " rows; wrote "
             << output_rows << " results to " << output_parquet_file

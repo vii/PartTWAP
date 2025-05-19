@@ -51,6 +51,8 @@ target_link_libraries(partvwap_test
     benchmark::benchmark
 )
 
+enable_testing()
+
 
 if (Parquet_FOUND) # this will fail the first time because the arrow and parquet libraries are not built, then succeeds the next time
     add_executable(partvwap_parquet_test partvwap_parquet_test.cc partvwap_parquet.cc)
@@ -140,6 +142,9 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         absl::cleanup
         absl::status
         absl::time
+        absl::flags
+        absl::flags_parse
+        absl::flags_usage
     )
 
     add_executable(parquet_to_turbo_integration_test
@@ -167,6 +172,7 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
     target_compile_definitions(parquet_to_turbo_integration_test PRIVATE
         ARROW_DEPRECATION_WARNINGS=0
     )
+    add_test(NAME parquet_to_turbo_integration_test COMMAND parquet_to_turbo_integration_test)
 
 
 endif()
@@ -186,7 +192,6 @@ target_link_libraries(turbo_test
     turbopfor_interface
 )
 
-enable_testing()
 
 add_test(NAME partvwap_test COMMAND partvwap_test)
 add_test(NAME partvwap_parquet_test COMMAND partvwap_parquet_test)
