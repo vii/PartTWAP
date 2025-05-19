@@ -14,7 +14,7 @@ FetchContent_GetProperties(TurboPFor SOURCE_DIR TURBOPFOR_SOURCE_DIR)
 
 add_custom_command(
     OUTPUT ${TURBOPFOR_SOURCE_DIR}/libic.a
-    COMMAND make STATIC=1 "OPT=-fpermissive -march=native" CC="${CMAKE_C_COMPILER}" CXX="${CMAKE_CXX_COMPILER}" libic.a -j8
+    COMMAND make STATIC=1 "OPT=-fpermissive -march=native"  _SSE="" _AVX2="" CC="${CMAKE_C_COMPILER}" CXX="${CMAKE_CXX_COMPILER}" libic.a -j8
     WORKING_DIRECTORY ${TURBOPFOR_SOURCE_DIR}
     COMMENT "Building TurboPFor libic.a"
 )
