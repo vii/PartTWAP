@@ -14,9 +14,9 @@ ABSL_FLAG(bool, buffer_in_memory, false,
           "reading from that");
 
 int main(int argc, char **argv) {
-  absl::ParseCommandLine(argc, argv);
+  std::vector<char *> args = absl::ParseCommandLine(argc, argv);
 
-  if (argc != 3) {
+  if (args.size() != 3) {
     std::cerr << "Usage: " << argv[0] << " <input_dir> <output_file>"
               << std::endl;
     std::cerr << "This program reads parquet files from <input_dir>, computes "
@@ -28,8 +28,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::string input_dir = argv[1];
-  std::string output_file = argv[2];
+  std::string input_dir = args[1];
+  std::string output_file = args[2];
 
   if (!std::filesystem::exists(input_dir) ||
       !std::filesystem::is_directory(input_dir)) {
