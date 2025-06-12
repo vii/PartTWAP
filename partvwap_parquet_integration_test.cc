@@ -48,4 +48,15 @@ TEST(ParquetIOIntegration, EndToEndTest) {
 
   ASSERT_TRUE(std::filesystem::exists(parquet_twap_file.tmp_filename));
   ASSERT_GT(std::filesystem::file_size(parquet_twap_file.tmp_filename), 0);
+
+  TempFileForTest buffered_parquet_twap_file;
+
+  cmd = "./partvwap_parquet_io " + std::string(test_dir.tmp_dirname) + " " +
+        buffered_parquet_twap_file.tmp_filename + " --buffer_in_memory";
+  cmd_output = RunCommandForTest(cmd.c_str());
+  std::cout << "Command output: " << cmd_output << std::endl;
+
+  ASSERT_TRUE(std::filesystem::exists(buffered_parquet_twap_file.tmp_filename));
+  ASSERT_GT(std::filesystem::file_size(buffered_parquet_twap_file.tmp_filename),
+            0);
 }

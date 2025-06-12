@@ -46,7 +46,7 @@ int create_test_parquet_main(int argc, char **argv) {
   for (int64_t file_idx = 0; file_idx < num_files; ++file_idx) {
     std::vector<InputRow> input_rows;
     const int64_t rows_per_file = 15485867;
-    input_rows.reserve(rows_per_file); 
+    input_rows.reserve(rows_per_file);
 
     // Create rows with varying timestamps, providers, symbols and prices
     for (int64_t i = 0; i < rows_per_file; i++) {

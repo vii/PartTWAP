@@ -1,12 +1,21 @@
 #include "partvwap.hh"
 #include "partvwap_parquet.hh"
+#include <absl/flags/flag.h>
+#include <absl/flags/parse.h>
+#include <absl/flags/usage.h>
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <filesystem>
 #include <iostream>
 #include <vector>
 
+ABSL_FLAG(bool, buffer_in_memory, false,
+          "Read from Parquet into a memory buffer then time the computation "
+          "reading from that");
+
 int main(int argc, char **argv) {
+  absl::ParseCommandLine(argc, argv);
+
   if (argc != 3) {
     std::cerr << "Usage: " << argv[0] << " <input_dir> <output_file>"
               << std::endl;
@@ -51,6 +60,25 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  std::vector<InputRow> input_row_buffer;
+
+  if (absl::GetFlag(FLAGS_buffer_in_memory)) {
+    auto buffer_status = ReadManyParquetFiles(
+        parquet_files,
+        [&](const InputRow &row) {
+          input_row_buffer.push_back(row);
+          return arrow::Status::OK();
+        },
+        providers, symbols);
+    if (!buffer_status.ok()) {
+      std::cerr << "Error reading parquet files into memory buffer: "
+                << buffer_status.ToString() << std::endl;
+      return 1;
+    }
+    std::cout << "Read " << input_row_buffer.size()
+              << " rows into memory buffer" << std::endl;
+  }
+
   arrow::Status read_status;
   arrow::Status write_status;
   absl::Time start_time = absl::Now();
@@ -58,15 +86,22 @@ int main(int argc, char **argv) {
   int64_t output_rows = 0;
   ComputeTWAP(
       [&](auto &&row_acceptor) {
-        // Read all parquet files and process the data
-        read_status &= ReadManyParquetFiles(
-            parquet_files,
-            [&](const InputRow &row) -> arrow::Status {
-              row_acceptor(row);
-              input_rows++;
-              return arrow::Status::OK();
-            },
-            providers, symbols);
+        if (absl::GetFlag(FLAGS_buffer_in_memory)) {
+          for (const auto &row : input_row_buffer) {
+            row_acceptor(row);
+            input_rows++;
+          }
+        } else {
+          // Read all parquet files and process the data
+          read_status &= ReadManyParquetFiles(
+              parquet_files,
+              [&](const InputRow &row) -> arrow::Status {
+                row_acceptor(row);
+                input_rows++;
+                return arrow::Status::OK();
+              },
+              providers, symbols);
+        }
       },
       [&](const OutputRow &row) {
         output_rows++;

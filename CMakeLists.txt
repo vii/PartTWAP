@@ -86,6 +86,9 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         absl::time
         Arrow::arrow_static
         Parquet::parquet_static
+        absl::flags
+        absl::flags_parse
+        absl::flags_usage
     )
 
     add_executable(create_test_parquet create_test_parquet.cc partvwap_parquet.cc)

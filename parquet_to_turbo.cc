@@ -16,7 +16,7 @@ ABSL_FLAG(absl::Duration, repeat_turbo_decode_duration, absl::ZeroDuration(),
           "collected");
 
 int main(int argc, char **argv) {
-  std::vector<char*> args = absl::ParseCommandLine(argc, argv);
+  std::vector<char *> args = absl::ParseCommandLine(argc, argv);
 
   if (args.size() != 4) {
     std::cerr << "Usage: " << args[0]

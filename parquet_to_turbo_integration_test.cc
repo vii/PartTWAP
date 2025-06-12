@@ -46,8 +46,9 @@ TEST(ParquetTurboIntegration, EndToEndTest) {
   TempFileForTest turbo_file;
   TempFileForTest output_parquet_file;
 
-  cmd = "./parquet_to_turbo --repeat_turbo_decode_duration=30s " + std::string(test_dir.tmp_dirname) + " " +
-        turbo_file.tmp_filename + " " + output_parquet_file.tmp_filename;
+  cmd = "./parquet_to_turbo --repeat_turbo_decode_duration=30s " +
+        std::string(test_dir.tmp_dirname) + " " + turbo_file.tmp_filename +
+        " " + output_parquet_file.tmp_filename;
   cmd_output = RunCommandForTest(cmd.c_str());
   std::cout << "Command output: " << cmd_output << std::endl;
 
