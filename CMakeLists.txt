@@ -132,7 +132,7 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
 
 
 
-    add_executable(parquet_to_turbo parquet_to_turbo.cc partvwap_parquet.cc partvwap_turbo.cc)
+    add_executable(parquet_to_turbo parquet_to_turbo.cc partvwap_parquet.cc)
     target_include_directories(parquet_to_turbo PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
     target_include_directories(parquet_to_turbo PRIVATE ${ARROW_INSTALL_DIR}/include)
     target_link_directories(parquet_to_turbo PRIVATE ${ARROW_INSTALL_DIR}/lib64)
@@ -154,7 +154,6 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
         parquet_to_turbo_integration_test.cc
         run_command_for_test.cc
         partvwap_parquet.cc
-        partvwap_turbo.cc
     )
     target_include_directories(parquet_to_turbo_integration_test PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
     target_include_directories(parquet_to_turbo_integration_test PRIVATE ${ARROW_INSTALL_DIR}/include)
@@ -180,7 +179,7 @@ if (Parquet_FOUND) # this will fail the first time because the arrow and parquet
 
 endif()
 
-add_executable(turbo_test turbo_test.cc partvwap_turbo.cc)
+add_executable(turbo_test turbo_test.cc)
 add_dependencies(turbo_test turbopfor_interface)
 target_include_directories(turbo_test PRIVATE ${TURBOPFOR_SOURCE_DIR}/include)
 target_link_libraries(turbo_test

@@ -59,7 +59,8 @@ TEST(ParquetTurboIntegration, EndToEndTest) {
 
   // Read all rows from the turbo file into a vector
   std::vector<InputRow> rows_from_turbo;
-  ReadTurboPForFromInputRows(turbo_file.tmp_filename.c_str(),
+  ReadTurboPForFromInputRows(bitnunpack128v64, bitnxunpack256v32,
+                             turbo_file.tmp_filename.c_str(),
                              [&rows_from_turbo](const InputRow &row) {
                                rows_from_turbo.push_back(row);
                              });

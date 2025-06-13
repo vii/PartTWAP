@@ -26,11 +26,12 @@ TEST(ComputeTWAP, InputRowsRoundTrip) {
     input_rows.push_back(
         InputRow{1000000000000 + i * 1000000, 0, 0, 100.0 + (i % 10)});
   }
-  WriteTurboPForFromInputRows(tmp_file.tmp_filename.c_str(), input_rows,
+  WriteTurboPForFromInputRows(bitnpack128v64, bitnpack256v32,
+                              tmp_file.tmp_filename.c_str(), input_rows,
                               NameToId{}, NameToId{});
   std::vector<InputRow> out_rows;
   ReadTurboPForFromInputRows(
-      tmp_file.tmp_filename.c_str(),
+      bitnunpack128v64, bitnunpack256v32, tmp_file.tmp_filename.c_str(),
       [&](const InputRow &row) { out_rows.push_back(row); });
   EXPECT_EQ(out_rows.size(), input_rows.size());
   ASSERT_TRUE(!out_rows.empty());
@@ -56,7 +57,8 @@ static void BM_TurboPForCompression(benchmark::State &state) {
         100.0 + (i % 10) // Prices varying from 100-109
     });
   }
-  WriteTurboPForFromInputRows(tmp_file.tmp_filename.c_str(), input_rows,
+  WriteTurboPForFromInputRows(bitnpack128v64, bitnpack256v32,
+                              tmp_file.tmp_filename.c_str(), input_rows,
                               providers, symbols);
 
   for (auto _ : state) {
@@ -64,7 +66,8 @@ static void BM_TurboPForCompression(benchmark::State &state) {
     double sum_twap = 0;
     ComputeTWAP(
         [&](auto &&f) {
-          ReadTurboPForFromInputRows(tmp_file.tmp_filename.c_str(), f);
+          ReadTurboPForFromInputRows(bitnunpack128v64, bitnunpack256v32,
+                                     tmp_file.tmp_filename.c_str(), f);
         },
         [&](const OutputRow &output_row) { sum_twap += output_row.twap; });
     benchmark::DoNotOptimize(sum_twap);

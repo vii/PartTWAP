@@ -69,7 +69,8 @@ int main(int argc, char **argv) {
   if (!std::filesystem::exists(output_turbo_file) ||
       std::filesystem::file_size(output_turbo_file) == 0) {
     absl::Time turbo_start_time = absl::Now();
-    WriteTurboPForFromInputRows(output_turbo_file, rows, providers, symbols);
+    WriteTurboPForFromInputRows(bitnpack128v64, bitnxpack256v32,
+                                output_turbo_file, rows, providers, symbols);
     absl::Time turbo_end_time = absl::Now();
 
     std::cout << "Successfully converted " << rows.size()
@@ -104,7 +105,8 @@ int main(int argc, char **argv) {
     output_rows = 0;
     ComputeTWAP(
         [&](auto &&row_acceptor) {
-          ReadTurboPForFromInputRows(output_turbo_file,
+          ReadTurboPForFromInputRows(bitnunpack128v64, bitnxunpack256v32,
+                                     output_turbo_file,
                                      [&](const InputRow &row) {
                                        row_acceptor(row);
                                        input_rows++;
