@@ -20,6 +20,8 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 #include <vector>
+#include <filesystem>
+#include <algorithm>
 
 arrow::Status WriteParquetFromInputRows(std::string filename,
                                         const std::vector<InputRow> &rows,
@@ -208,4 +210,13 @@ arrow::Status ParquetOutputWriter::CloseOutputFile() {
   ARROW_RETURN_NOT_OK(OutputRowChunk());
   ARROW_RETURN_NOT_OK(outfile->Close());
   return arrow::Status::OK();
+}
+
+std::vector<std::string> FindAndSortParquetFiles(std::string_view input_dir) {
+  std::vector<std::string> parquet_files;
+  for (const auto &entry : std::filesystem::directory_iterator(input_dir)) {
+    parquet_files.push_back(entry.path().string());
+  }
+  std::sort(parquet_files.begin(), parquet_files.end());
+  return parquet_files;
 }

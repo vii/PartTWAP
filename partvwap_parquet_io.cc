@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <iostream>
 #include <vector>
+#include <algorithm>
 
 ABSL_FLAG(bool, buffer_in_memory, false,
           "Read from Parquet into a memory buffer then time the computation "
@@ -38,10 +39,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  std::vector<std::string> parquet_files;
-  for (const auto &entry : std::filesystem::directory_iterator(input_dir)) {
-    parquet_files.push_back(entry.path().string());
-  }
+  std::vector<std::string> parquet_files = FindAndSortParquetFiles(input_dir);
 
   if (parquet_files.empty()) {
     std::cerr << "Error: No files found in directory: " << input_dir

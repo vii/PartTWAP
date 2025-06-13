@@ -82,3 +82,6 @@ struct ParquetOutputWriter {
   arrow::Status OutputRowChunk();
   arrow::Status CloseOutputFile();
 };
+
+// Find all parquet files in a directory and return them sorted
+std::vector<std::string> FindAndSortParquetFiles(std::string_view input_dir);
