@@ -32,16 +32,9 @@ TEST(ParquetTurboIntegration, EndToEndTest) {
   std::string cmd =
       "./create_test_parquet " + std::string(test_dir.tmp_dirname) + " 3";
   std::string cmd_output = RunCommandForTest(cmd.c_str());
-  std::vector<std::string> parquet_files;
-
-  int count = 0;
-  for (const auto &entry :
-       std::filesystem::directory_iterator(test_dir.tmp_dirname)) {
-    std::cout << "Found file: " << entry.path() << std::endl;
-    parquet_files.push_back(entry.path().string());
-    count++;
-  }
-  ASSERT_EQ(count, 3) << "Expected 3 parquet files, but found " << count;
+  std::vector<std::string> parquet_files = FindAndSortParquetFiles(test_dir.tmp_dirname);
+  ASSERT_EQ(parquet_files.size(), 3)
+      << "Expected 3 parquet files, but found " << parquet_files.size();
 
   TempFileForTest turbo_file;
   TempFileForTest output_parquet_file;
