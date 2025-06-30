@@ -6,12 +6,14 @@
 #include <absl/strings/str_cat.h>
 #include <absl/strings/string_view.h>
 #include <absl/time/time.h>
+#include <algorithm>
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 #include <arrow/testing/gtest_util.h>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -20,8 +22,6 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 #include <vector>
-#include <filesystem>
-#include <algorithm>
 
 arrow::Status WriteParquetFromInputRows(std::string filename,
                                         const std::vector<InputRow> &rows,

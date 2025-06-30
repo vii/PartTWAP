@@ -194,8 +194,20 @@ target_link_libraries(turbo_test
     turbopfor_interface
 )
 
+add_executable(perf_counter_scope_test perrf_counter_scope_test.cc)
+target_link_libraries(perf_counter_scope_test
+    GTest::gtest_main
+    GTest::gmock_main
+    absl::flat_hash_map
+    absl::strings
+    absl::cleanup
+    absl::status
+    absl::time
+    benchmark::benchmark
+)
 
 add_test(NAME partvwap_test COMMAND partvwap_test)
 add_test(NAME partvwap_parquet_test COMMAND partvwap_parquet_test)
 add_test(NAME partvwap_parquet_integration_test COMMAND partvwap_parquet_integration_test)
 add_test(NAME turbo_test COMMAND turbo_test)
+add_test(NAME perf_counter_scope_test COMMAND perf_counter_scope_test)

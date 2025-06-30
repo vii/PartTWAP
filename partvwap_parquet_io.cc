@@ -1,14 +1,15 @@
 #include "partvwap.hh"
 #include "partvwap_parquet.hh"
+#include "perf_counter_scope.hh"
 #include <absl/flags/flag.h>
 #include <absl/flags/parse.h>
 #include <absl/flags/usage.h>
+#include <algorithm>
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <filesystem>
 #include <iostream>
 #include <vector>
-#include <algorithm>
 
 ABSL_FLAG(bool, buffer_in_memory, false,
           "Read from Parquet into a memory buffer then time the computation "
@@ -80,32 +81,37 @@ int main(int argc, char **argv) {
   arrow::Status read_status;
   arrow::Status write_status;
   absl::Time start_time = absl::Now();
-  int64_t input_rows = 0;
+  absl::Time end_time;
+  int64_t input_rows = 0; 
   int64_t output_rows = 0;
-  ComputeTWAP(
-      [&](auto &&row_acceptor) {
-        if (absl::GetFlag(FLAGS_buffer_in_memory)) {
-          for (const auto &row : input_row_buffer) {
-            row_acceptor(row);
-            input_rows++;
+  {
+    PerfCounterScope scope("ComputeTWAP");
+    ComputeTWAP(
+        [&](auto &&row_acceptor) {
+          if (absl::GetFlag(FLAGS_buffer_in_memory)) {
+            for (const auto &row : input_row_buffer) {
+              row_acceptor(row);
+              input_rows++;
+            }
+          } else {
+            // Read all parquet files and process the data
+            read_status &= ReadManyParquetFiles(
+                parquet_files,
+                [&](const InputRow &row) -> arrow::Status {
+                  row_acceptor(row);
+                  input_rows++;
+                  return arrow::Status::OK();
+                },
+                providers, symbols);
           }
-        } else {
-          // Read all parquet files and process the data
-          read_status &= ReadManyParquetFiles(
-              parquet_files,
-              [&](const InputRow &row) -> arrow::Status {
-                row_acceptor(row);
-                input_rows++;
-                return arrow::Status::OK();
-              },
-              providers, symbols);
-        }
-      },
-      [&](const OutputRow &row) {
-        output_rows++;
-        write_status &= writer.AppendOutputRow(row);
-      });
-  absl::Time end_time = absl::Now();
+        },
+        [&](const OutputRow &row) {
+          output_rows++;
+          write_status &= writer.AppendOutputRow(row);
+        });
+    scope.IncrementNumRows(input_rows); 
+    end_time = absl::Now();
+  }
   if (!write_status.ok()) {
     std::cerr << "Error writing output file '" << output_file
               << "': " << write_status.ToString() << std::endl;

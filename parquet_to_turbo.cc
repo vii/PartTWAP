@@ -1,6 +1,7 @@
 #include "partvwap.hh"
 #include "partvwap_parquet.hh"
 #include "partvwap_turbo.hh"
+#include "perf_counter_scope.hh"
 
 #include <absl/flags/flag.h>
 #include <absl/flags/parse.h>
@@ -100,20 +101,24 @@ int main(int argc, char **argv) {
     start_time = absl::Now();
     input_rows = 0;
     output_rows = 0;
-    ComputeTWAP(
-        [&](auto &&row_acceptor) {
-          ReadTurboPForFromInputRows(bitnunpack128v64, bitnxunpack256v32,
-                                     output_turbo_file,
-                                     [&](const InputRow &row) {
-                                       row_acceptor(row);
-                                       input_rows++;
-                                     });
-        },
-        [&](const OutputRow &row) {
-          output_rows++;
-          write_status &= writer.AppendOutputRow(row);
-        });
-    end_time = absl::Now();
+    {
+      PerfCounterScope perf_monitor("ComputeTWAP");
+      ComputeTWAP(
+          [&](auto &&row_acceptor) {
+            ReadTurboPForFromInputRows(bitnunpack128v64, bitnxunpack256v32,
+                                       output_turbo_file,
+                                       [&](const InputRow &row) {
+                                         row_acceptor(row);
+                                         input_rows++;
+                                       });
+          },
+          [&](const OutputRow &row) {
+            output_rows++;
+            write_status &= writer.AppendOutputRow(row);
+          });
+      perf_monitor.IncrementNumRows(input_rows);
+      end_time = absl::Now();
+    }
     if (!write_status.ok()) {
       std::cerr << "Error writing output file '" << output_parquet_file
                 << "': " << write_status.ToString() << std::endl;
