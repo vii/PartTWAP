@@ -4,6 +4,4 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-TEST(PerfCounterScopeTest, Constructor) {
-    PerfCounterScope scope;
-}
+TEST(PerfCounterScopeTest, Constructor) { PerfCounterScope scope; }

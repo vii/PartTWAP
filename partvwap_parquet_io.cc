@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
   arrow::Status write_status;
   absl::Time start_time = absl::Now();
   absl::Time end_time;
-  int64_t input_rows = 0; 
+  int64_t input_rows = 0;
   int64_t output_rows = 0;
   {
     PerfCounterScope scope("ComputeTWAP");
@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
           output_rows++;
           write_status &= writer.AppendOutputRow(row);
         });
-    scope.IncrementNumRows(input_rows); 
+    scope.IncrementNumRows(input_rows);
     end_time = absl::Now();
   }
   if (!write_status.ok()) {

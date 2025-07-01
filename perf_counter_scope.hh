@@ -78,7 +78,7 @@ class PerfCounterScope {
   std::string scope_name;
   uint64_t num_rows = 0;
 
-  int OpenPerfEventFd(uint32_t type, uint64_t config, unsigned long flags= 0) {
+  int OpenPerfEventFd(uint32_t type, uint64_t config, unsigned long flags = 0) {
     struct perf_event_attr attr;
     std::memset(&attr, 0, sizeof(attr));
     attr.type = type;
@@ -107,25 +107,26 @@ public:
       : scope_name(name.empty() ? std::string(location.file_name()) + ":" +
                                       std::to_string(location.line())
                                 : std::move(name)) {
-    int cycles_fd = OpenPerfEventFd(PERF_TYPE_HARDWARE,
-                                    PERF_COUNT_HW_CPU_CYCLES);
+    int cycles_fd =
+        OpenPerfEventFd(PERF_TYPE_HARDWARE, PERF_COUNT_HW_CPU_CYCLES);
     if (cycles_fd == -1) {
-      throw std::runtime_error("Failed to open cycles perf event: " +
-                               std::string(strerror(errno)));
+      std::cerr << "Failed to open cycles perf event: " << strerror(errno)
+                << " for scope " << scope_name;
+      return;
     }
 
     fd_cycles = FileForPerfEvents(cycles_fd);
 
-    int instructions_fd = OpenPerfEventFd(
-        PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS);
+    int instructions_fd =
+        OpenPerfEventFd(PERF_TYPE_HARDWARE, PERF_COUNT_HW_INSTRUCTIONS);
     if (instructions_fd == -1) {
       throw std::runtime_error("Failed to open instructions perf event: " +
                                std::string(strerror(errno)));
     }
     fd_instructions = FileForPerfEvents(instructions_fd);
 
-    int branch_misses_fd = OpenPerfEventFd(
-        PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_MISSES);
+    int branch_misses_fd =
+        OpenPerfEventFd(PERF_TYPE_HARDWARE, PERF_COUNT_HW_BRANCH_MISSES);
     if (branch_misses_fd == -1) {
       throw std::runtime_error("Failed to open branch misses perf event: " +
                                std::string(strerror(errno)));
@@ -135,8 +136,8 @@ public:
     uint64_t l1_cache_config = (PERF_COUNT_HW_CACHE_L1D << 0) |
                                (PERF_COUNT_HW_CACHE_OP_READ << 8) |
                                (PERF_COUNT_HW_CACHE_RESULT_MISS << 16);
-    int l1_dcache_misses_fd = OpenPerfEventFd(
-        PERF_TYPE_HW_CACHE, l1_cache_config);
+    int l1_dcache_misses_fd =
+        OpenPerfEventFd(PERF_TYPE_HW_CACHE, l1_cache_config);
     if (l1_dcache_misses_fd == -1) {
       throw std::runtime_error("Failed to open L1 cache misses perf event: " +
                                std::string(strerror(errno)));
@@ -157,6 +158,9 @@ public:
   void IncrementNumRows(uint64_t amt = 1) { num_rows += amt; }
 
   ~PerfCounterScope() {
+    if (!fd_cycles) {
+      return;
+    }
     stop();
     print_summary();
   }
@@ -195,47 +199,43 @@ private:
   }
 
   void print_summary(std::ostream &os = std::cout) {
-    try {
-      PerfCounts counts = read();
+    PerfCounts counts = read();
 
-      if (counts.cycles == 0) {
-        os << "Warning: No performance data collected for scope '" << scope_name
-           << "'" << std::endl;
-        return;
-      }
-
-      double ipc = (double)counts.instructions / counts.cycles;
-      double branch_miss_rate =
-          (double)counts.branch_misses / counts.instructions * 100.0;
-      double l1_miss_rate =
-          (double)counts.l1_dcache_misses / counts.instructions * 100.0;
-      double frontend_stall_pct =
-          (double)counts.stalled_cycles_frontend / counts.cycles * 100.0;
-
-      os << "\n=== PERFORMANCE METRICS [" << scope_name << "] ===" << std::endl;
-
-      if (num_rows > 0) {
-        os << "  Cycles per row: " << (double)counts.cycles / num_rows
-           << std::endl;
-        os << "  Instructions per row: "
-           << (double)counts.instructions / num_rows << std::endl;
-        os << "  Branch mispredictions per row: "
-           << (double)counts.branch_misses / num_rows << std::endl;
-        os << "  L1 cache misses per row: "
-           << (double)counts.l1_dcache_misses / num_rows << std::endl;
-      }
-
-      os << "  IPC (Instructions per cycle): " << std::fixed
-         << std::setprecision(3) << ipc << std::endl;
-      os << "  Branch misprediction rate: " << std::fixed
-         << std::setprecision(3) << branch_miss_rate << "%" << std::endl;
-      os << "  L1 cache miss rate: " << std::fixed << std::setprecision(3)
-         << l1_miss_rate << "%" << std::endl;
-      os << "  Frontend stall percentage: " << std::fixed
-         << std::setprecision(3) << frontend_stall_pct << "%" << std::endl;
-      os << "================================\n" << std::endl;
-    } catch (const std::exception &e) {
-      os << "Error reading performance data: " << e.what() << std::endl;
+    if (counts.cycles == 0) {
+      os << "Warning: No performance data collected for scope '" << scope_name
+         << "'" << std::endl;
+      return;
     }
+
+    double ipc = (double)counts.instructions / counts.cycles;
+    double branch_miss_rate =
+        (double)counts.branch_misses / counts.instructions * 100.0;
+    double l1_miss_rate =
+        (double)counts.l1_dcache_misses / counts.instructions * 100.0;
+    double frontend_stall_pct =
+        (double)counts.stalled_cycles_frontend / counts.cycles * 100.0;
+
+    os << "\n=== PERFORMANCE METRICS [" << scope_name << "] ===" << std::endl;
+
+    if (num_rows > 0) {
+      os << "  Cycles per row: " << (double)counts.cycles / num_rows
+         << std::endl;
+      os << "  Instructions per row: " << (double)counts.instructions / num_rows
+         << std::endl;
+      os << "  Branch mispredictions per row: "
+         << (double)counts.branch_misses / num_rows << std::endl;
+      os << "  L1 cache misses per row: "
+         << (double)counts.l1_dcache_misses / num_rows << std::endl;
+    }
+
+    os << "  IPC (Instructions per cycle): " << std::fixed
+       << std::setprecision(3) << ipc << std::endl;
+    os << "  Branch misprediction rate: " << std::fixed << std::setprecision(3)
+       << branch_miss_rate << "%" << std::endl;
+    os << "  L1 cache miss rate: " << std::fixed << std::setprecision(3)
+       << l1_miss_rate << "%" << std::endl;
+    os << "  Frontend stall percentage: " << std::fixed << std::setprecision(3)
+       << frontend_stall_pct << "%" << std::endl;
+    os << "================================\n" << std::endl;
   }
 };
